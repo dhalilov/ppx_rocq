@@ -10,6 +10,5 @@
  (name ppx_rocq)
  (synopsis "PPX syntax extensions for quoting Rocq terms in OCaml")
  (depends
-   rocq-core
    rocq-runtime
    ppxlib))

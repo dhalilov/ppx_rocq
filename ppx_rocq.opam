@@ -5,7 +5,6 @@ maintainer: ["Dario Halilovic"]
 authors: ["Dario Halilovic"]
 depends: [
   "dune" {>= "3.22"}
-  "rocq-core"
   "rocq-runtime"
   "ppxlib"
   "odoc" {with-doc}
