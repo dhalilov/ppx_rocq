@@ -201,7 +201,7 @@ module Constr = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let cases = List.map (expand_case ~loc) cases in
     let cases = Ast_builder.Default.elist ~loc cases in
-    [%expr Runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+    [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
 
   let match_pattern =
     let regular_pattern = Ast_pattern.(
