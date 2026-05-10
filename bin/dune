@@ -1,0 +1,9 @@
+(executable
+ (name main)
+ (link_flags -linkall)
+ (libraries ppx_rocq ppx_rocq.runtime ppxlib))
+
+(install
+ (section bin)
+ (files
+  (main.exe as ppx_rocq)))

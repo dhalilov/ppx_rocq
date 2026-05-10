@@ -1,0 +1,6 @@
+(library
+ (name ppx_rocq_lib)
+ (public_name ppx_rocq.lib)
+ (synopsis "Library for ppx_rocq")
+ (libraries ppxlib str)
+ (preprocess (pps ppxlib.metaquot)))

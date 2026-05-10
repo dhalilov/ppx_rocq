@@ -1,0 +1,10 @@
+(library
+ (name ppx_rocq)
+ (public_name ppx_rocq)
+ (kind ppx_rewriter)
+ (libraries
+   ppxlib
+   ppx_rocq.lib
+   ppx_rocq.runtime)
+ (ppx_runtime_libraries ppx_rocq.runtime)
+ (preprocess (pps ppxlib.metaquot ppx_string)))
