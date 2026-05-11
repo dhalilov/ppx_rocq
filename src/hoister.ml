@@ -1,0 +1,31 @@
+(** AST traversal with hoisting. *)
+
+open Ppxlib
+
+let hoist ~loc e =
+  [%expr [%e e] [@hoist]]
+
+let hoisted_expressions_collector =
+  let hoist_attribute = Ast_pattern.(attribute ~name:(string "hoist") ~payload:(pstr nil)) in
+  let expr_pattern = Ast_pattern.(pexp_attributes (hoist_attribute ^:: drop) __) in
+  object
+    inherit [structure_item list] Ast_traverse.fold_map as super
+
+    method! expression expr acc =
+      let loc = expr.pexp_loc in
+      match Ast_pattern.parse_res expr_pattern loc expr (fun unannotated -> unannotated) with
+      | Ok expr ->
+         let symbol = gen_symbol () in
+         let variable = Ast_builder.Default.pvar ~loc symbol in
+         let binding = [%stri let [%p variable] = [%e expr]] in
+         (Ast_builder.Default.evar ~loc symbol, binding :: acc)
+      | Error _ ->
+         super#expression expr acc
+  end
+
+let expand_hoisting structure =
+  let expand_item item =
+    let new_item, hoisted = hoisted_expressions_collector#structure_item item [] in
+    List.rev (new_item :: hoisted)
+  in
+  List.concat_map expand_item structure

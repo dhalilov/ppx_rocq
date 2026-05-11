@@ -191,8 +191,8 @@ module Constr = struct
          let bindings = find_all_pattern_vars ~loc:lhs_loc pattern in
          let bindings = List.map expand_pattern_var bindings in
          let pattern_expr = Ast_builder.Default.estring ~loc:lhs_loc pattern in
-         [%expr Ppx_rocq_runtime.Parsing.parse_match_pattern ~loc:[%e rocq_loc] [%e pattern_expr]], bindings
-      | None -> [%expr Ppx_rocq_runtime.Parsing.parse_match_pattern ~loc:[%e rocq_loc] "_"], []
+         Hoister.hoist ~loc [%expr Ppx_rocq_runtime.Parsing.parse_match_pattern ~loc:[%e rocq_loc] [%e pattern_expr]], bindings
+      | None -> Hoister.hoist ~loc [%expr Ppx_rocq_runtime.Parsing.parse_match_pattern ~loc:[%e rocq_loc] "_"], []
     in
     let rhs = [%expr fun subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]] in
     [%expr ([%e lhs], [%e rhs])]
@@ -266,4 +266,5 @@ let () =
       Constr.rule;
       Open_constr.rule
     ]
+    ~impl:(Hoister.expand_hoisting)
     "ppx_rocq"
