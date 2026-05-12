@@ -166,7 +166,7 @@ let quasiparse_constrexpr ?loc s context =
        CAst.make ~loc genarg
   in
   with_antiquotations Procq.Constr.term
-    (fun ~loc n -> antiquotation_to_constrexpr ~loc (List.nth context n))
+    (fun ~loc n -> antiquotation_to_constrexpr ~loc context.(n))
     (fun () -> parse_constrexpr ?loc s)
 
 let glob_constr_of_quasistring ?loc s context =

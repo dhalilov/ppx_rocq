@@ -65,7 +65,7 @@ end
 (** Extensions [[%expr]], [[%glob_constr]], and [[%constr]] support term
     antiquotations. *)
 
-let build_antiquotation_list bindings ~loc =
+let build_antiquotation_context bindings ~loc =
   let binding_to_expr (expr, typ) =
     match typ with
     | Quasiquotation.Unspecified | Constr -> [%expr `Constr ([%e expr]: EConstr.constr)]
@@ -73,7 +73,7 @@ let build_antiquotation_list bindings ~loc =
     | Expr -> [%expr `Expr ([%e expr]: Constrexpr.constr_expr)]
   in
   let bindings = List.map binding_to_expr bindings in
-  Ast_builder.Default.elist ~loc bindings
+  Ast_builder.Default.pexp_array ~loc bindings
 
 let expand_antiquotation ?(memoize=false) parser quasiparser ~ctxt string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
@@ -91,7 +91,7 @@ let expand_antiquotation ?(memoize=false) parser quasiparser ~ctxt string string
      in Hoister.hoist ~loc expr
   | _ ->
      [%expr
-      let context = [%e build_antiquotation_list bindings ~loc] in
+      let context = [%e build_antiquotation_context bindings ~loc] in
       [%e quasiparser] ~loc:[%e rocq_loc] [%e template] context]
 
 (** {2 [Constrexpr.constr_expr]} *)

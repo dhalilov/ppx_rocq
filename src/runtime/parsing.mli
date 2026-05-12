@@ -85,18 +85,18 @@ type antiquotation =
   | `Expr of constrexpr     (** [%expr:{…}] *)
   ]
 
-val quasiparse_constrexpr : ?loc:Loc.t -> string -> antiquotation list -> constrexpr
+val quasiparse_constrexpr : ?loc:Loc.t -> string -> antiquotation array -> constrexpr
 (** [quasiparse_constrexpr s context] behaves like [parse_constexpr s], except that
-    antiquotations of the form [%{n}] are replaced by [List.nth context n]. *)
+    antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val glob_constr_of_quasistring : ?loc: Loc.t -> string -> antiquotation list -> glob_constr Proofview.tactic
+val glob_constr_of_quasistring : ?loc: Loc.t -> string -> antiquotation array -> glob_constr Proofview.tactic
 (** [glob_constr_of_quasistring s context] behaves like [glob_constr_of_string s],
-    except that antiquotations of the form [%{n}] are replaced by [List.nth context n]. *)
+    except that antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val constr_of_quasistring : ?loc:Loc.t -> string -> antiquotation list -> constr Proofview.tactic
+val constr_of_quasistring : ?loc:Loc.t -> string -> antiquotation array -> constr Proofview.tactic
 (** [constr_of_quasistring s context] behaves like [constr_of_string s], except that
-    antiquotations of the form [%{n}] are replaced by [List.nth context n]. *)
+    antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val open_constr_of_quasistring : ?loc:Loc.t -> string -> antiquotation list -> open_constr Proofview.tactic
+val open_constr_of_quasistring : ?loc:Loc.t -> string -> antiquotation array -> open_constr Proofview.tactic
 (** [open_constr_of_quasistring s] behaves like [open_constr_of_string], except that
-    antiquotations of the form [%{n}] are replaced by [List.nth context n]. *)
+    antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
