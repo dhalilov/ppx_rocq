@@ -9,6 +9,7 @@ type constrexpr = Constrexpr.constr_expr
 type glob_constr = Glob_term.glob_constr
 type constr = EConstr.constr
 type open_constr = EConstr.t
+type pattern = Pattern.constr_pattern
 
 (** {1 Conversions} *)
 
@@ -79,5 +80,15 @@ module Open_constr = struct
       let sigma, econstr = Pretyping.understand_tcc env sigma e in
       Proofview.Unsafe.tclEVARS sigma >>
       return econstr
+    end
+end
+
+module Pattern = struct
+  type t = pattern
+
+  let of_constrexpr e =
+    with_env begin fun env sigma ->
+      let _, pattern = Constrintern.interp_constr_pattern env sigma e in
+      return pattern
     end
 end

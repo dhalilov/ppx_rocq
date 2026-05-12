@@ -2,8 +2,8 @@
 
 open Tactics
 
-type 'a case = pattern * 'a continuation
-and pattern = Constrexpr.constr_expr
+type 'a case = pattern Proofview.tactic * 'a continuation
+and pattern = Pattern.constr_pattern
 and 'a continuation = substitution -> 'a Proofview.tactic
 and substitution = Ltac_pretype.patvar_map
 
@@ -14,7 +14,7 @@ let match_term t ~cases =
     let rec test_cases (e, info) = function
       | [] -> Proofview.tclZERO ~info e
       | (pattern, k) :: rest ->
-         let _, pattern = Constrintern.interp_constr_pattern env sigma pattern in
+         let* pattern in
          try
            let subst = Constr_matching.matches env sigma pattern t in
            let tac = k subst in

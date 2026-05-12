@@ -36,6 +36,11 @@ type constr = EConstr.constr
 type open_constr = EConstr.t
 (** Type of well-typed terms, potentially with holes (evars). *)
 
+(** {2 Patterns} *)
+
+type pattern = Pattern.constr_pattern
+(** Type of interpreted patterns. *)
+
 (** {1 Conversion methods} *)
 
 module Expr : sig
@@ -90,4 +95,12 @@ module Open_constr : sig
   val of_glob_constr : glob_constr -> t Proofview.tactic
   (** [of_glob_constr c] behaves like [Constr.of_glob_constr c], except that
       unresolved evars are allowed in the resulting term. *)
+end
+
+module Pattern : sig
+  type t = pattern
+  (** Type of interpreted patterns. *)
+
+  val of_constrexpr : constrexpr -> t Proofview.tactic
+  (** [of_constrexpr e] interprets expression [e] as a pattern. *)
 end

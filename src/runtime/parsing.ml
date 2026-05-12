@@ -43,6 +43,10 @@ let open_constr_of_string ?loc s =
   let parsed_term = parse_constrexpr ?loc s in
   Open_constr.of_constrexpr parsed_term
 
+let match_pattern_of_string ?loc s =
+  let parsed_pattern = parse_match_pattern ?loc s in
+  Pattern.of_constrexpr parsed_pattern
+
 (** {1 Parsing with antiquotations} *)
 
 type genarg_antiquotation =

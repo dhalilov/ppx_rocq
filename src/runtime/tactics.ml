@@ -1,5 +1,6 @@
 (** Utilities for manipulating tactics. *)
 
+open Proofview.Monad
 let (let*) = Proofview.Monad.(>>=)
 
 let with_env t =
@@ -14,3 +15,13 @@ let with_env t =
      let* env = Proofview.tclENV in
      let* sigma = Proofview.tclEVARMAP in
      t env sigma
+
+let memoize t =
+  let res = ref None in
+  match !res with
+  | None ->
+     let* v = t in
+     res := Some v;
+     return v
+  | Some v ->
+     return v

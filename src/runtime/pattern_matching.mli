@@ -2,10 +2,10 @@
 
 (** {1 Term matching} *)
 
-type 'a case = pattern * 'a continuation
+type 'a case = pattern Proofview.tactic * 'a continuation
 (** Type of cases in term matching. *)
 
-and pattern = Constrexpr.constr_expr
+and pattern = Pattern.constr_pattern
 (** Type of patterns in term pattern matching. *)
 
 and 'a continuation = substitution -> 'a Proofview.tactic
