@@ -18,6 +18,8 @@ let with_env t =
 
 let memoize t =
   let res = ref None in
+  (* Enter tactic mode *)
+  let* () = return () in
   match !res with
   | None ->
      let* v = t in
