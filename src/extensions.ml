@@ -75,7 +75,7 @@ let build_antiquotation_list bindings ~loc =
   let bindings = List.map binding_to_expr bindings in
   Ast_builder.Default.elist ~loc bindings
 
-let expand_antiquotation parser quasiparser ~ctxt string string_loc =
+let expand_antiquotation ?(memoize=false) parser quasiparser ~ctxt string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
   let template, bindings =
     Quasiquotation.parse ~loc:string_loc string |>
@@ -84,7 +84,11 @@ let expand_antiquotation parser quasiparser ~ctxt string string_loc =
   let template = Ast_builder.Default.estring ~loc:string_loc template in
   let rocq_loc = Ppx_utils.rocq_loc_of_loc string_loc in
   match bindings with
-  | [] -> [%expr [%e parser] ~loc:[%e rocq_loc] [%e template]]
+  | [] ->
+     let expr =
+       if memoize then [%expr Ppx_rocq_runtime.Tactics.memoize ([%e parser] ~loc:[%e rocq_loc] [%e template])]
+       else [%expr [%e parser] ~loc:[%e rocq_loc] [%e template]]
+     in Hoister.hoist ~loc expr
   | _ ->
      [%expr
       let context = [%e build_antiquotation_list bindings ~loc] in
@@ -116,7 +120,7 @@ module Preterm = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_quasistring] in
-    expand_antiquotation parser quasiparser ~ctxt
+    expand_antiquotation ~memoize:true parser quasiparser ~ctxt
 
   let extension =
     Extension.V3.declare
@@ -146,7 +150,7 @@ module Constr = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.constr_of_string] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.constr_of_quasistring] in
-    expand_antiquotation parser quasiparser ~ctxt
+    expand_antiquotation ~memoize:true parser quasiparser ~ctxt
 
   let string_pattern =
     let pattern = Ast_pattern.(pexp_constant (pconst_string __ __ drop)) in
@@ -240,7 +244,7 @@ module Open_constr = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.open_constr_of_string] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.open_constr_of_quasistring] in
-    expand_antiquotation parser quasiparser ~ctxt
+    expand_antiquotation ~memoize:true parser quasiparser ~ctxt
 
   let extension =
     Extension.V3.declare
