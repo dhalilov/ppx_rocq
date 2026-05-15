@@ -26,3 +26,11 @@ let memoize t =
      return v
   | Some v ->
      return v
+
+let of_array tacs =
+  let* list = CArray.fold_right (fun t acc ->
+    let* v = t in
+    let* acc in
+    return (v :: acc)
+  ) tacs (return [])
+  in return (Array.of_list list)

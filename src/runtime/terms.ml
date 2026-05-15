@@ -28,6 +28,13 @@ module Expr = struct
     let* sigma = Tactics.evar_map in
     let flags = PrintingFlags.current () in
     return (Constrextern.extern_constr ~flags env sigma c)
+
+  let map f c =
+    Constrexpr_ops.map_constr_expr_with_binders
+      (fun _ () -> ())
+      (fun () -> f)
+      ()
+      c
 end
 
 module Glob_constr = struct
@@ -43,6 +50,8 @@ module Glob_constr = struct
     let* sigma = Tactics.evar_map in
     let flags = (PrintingFlags.current ()).detype in
     return (Detyping.detype Detyping.Now ~flags env sigma c)
+
+  let map = Glob_ops.map_glob_constr
 end
 
 module Constr = struct
@@ -81,6 +90,10 @@ module Open_constr = struct
     let sigma, econstr = Pretyping.understand_tcc env sigma e in
     Proofview.Unsafe.tclEVARS sigma >>
     return econstr
+
+  let map f c =
+    let* sigma = Tactics.evar_map in
+    return (EConstr.map sigma f)
 end
 
 module Pattern = struct

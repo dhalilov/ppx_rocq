@@ -63,19 +63,41 @@ val match_pattern_of_string : ?loc:Loc.t -> string -> pattern Proofview.tactic
 
 (** {1 Parsing with antiquotations} *)
 
-(** An antiquotation is a hole that is substituted by an expression at parsing
-    time. They are denoted by [%{x}] or [%kind:{x}], where [x] is a valid OCaml
-    expression. Methods that can handle antiquotations are called {i
-    quasi-parsing methods}.
+(** An antiquotation is a part of a term that is substituted by an OCaml
+    expression. Antiquotations are denoted by [%{x}] or [%kind:{x}], where [x]
+    is a valid OCaml expression. Methods that can handle antiquotations are
+    called {i quasi-parsing methods}.
 
     For example, while ["1 + 1"] can be immediately parsed to a term, parsing
-    ["1 + %{x}"] requires interpreting and substituting the OCaml value [x]
+    and interpreting ["1 + %{x}"] requires substituting the OCaml value [x]
     before continuing.
 
-    All quasi-parsing methods below therefore take an additional argument,
-    [context], that represents the substitution from names to OCaml
-    expressions. The type of the context depends on the type of holes allowed,
-    i.e., terms in terms, strings in vernaculars, etc.
+    The implementation of quasi-parsing proceeds as follows:
+
+    1. Antiquoted values are replaced with holes: the expression ["%{x} + %{y}"]
+       is parsed as ["□₀ + □₁"], where [□] is a special placeholder. For
+       simplicity, we assign a natural number to each hole in order, so that
+       substitution is a simple array lookup.
+
+    2. The expression is converted up to the target term representation, via
+       internalization ([glob_constr]) or interpretation ([constr]).
+
+    3. The obtained expression is memoized, so that the common part of each quasiterm
+       is shared between different substitutions.
+
+    4. Given a context (i.e. array of expressions), we perform the substitution
+       according to the following table (“source” is the type of antiquotation,
+       while “target” refers to the final desired term representation):
+
+       +-----------------+-------------+-------------+-------------+
+       | Source \ Target | constrexpr  | glob_constr |   constr    |
+       +-----------------+-------------+-------------+-------------+
+       | constrexpr      |  identity   | internalize |   interp    |
+       +-----------------+-------------+-------------+-------------+
+       | glob_constr     |  genarg     |   identity  |   pretype   |
+       +-----------------+-------------+-------------+-------------+
+       | constr          |  genarg     |   genarg    |   identity  |
+       +-----------------+-------------+-------------+-------------+
  *)
 
 (** Types of antiquotations. *)
@@ -85,18 +107,18 @@ type antiquotation =
   | `Expr of constrexpr     (** [%expr:{…}] *)
   ]
 
-val quasiparse_constrexpr : ?loc:Loc.t -> string -> antiquotation array -> constrexpr
+val quasiparse_constrexpr : ?loc:Loc.t -> string -> (antiquotation array -> constrexpr)
 (** [quasiparse_constrexpr s context] behaves like [parse_constexpr s], except that
     antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val glob_constr_of_quasistring : ?loc: Loc.t -> string -> antiquotation array -> glob_constr Proofview.tactic
+val glob_constr_of_quasistring : ?loc: Loc.t -> string -> (antiquotation array -> glob_constr Proofview.tactic) Proofview.tactic
 (** [glob_constr_of_quasistring s context] behaves like [glob_constr_of_string s],
     except that antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val constr_of_quasistring : ?loc:Loc.t -> string -> antiquotation array -> constr Proofview.tactic
+val constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array -> constr Proofview.tactic) Proofview.tactic
 (** [constr_of_quasistring s context] behaves like [constr_of_string s], except that
     antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val open_constr_of_quasistring : ?loc:Loc.t -> string -> antiquotation array -> open_constr Proofview.tactic
-(** [open_constr_of_quasistring s] behaves like [open_constr_of_string], except that
+val open_constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array -> open_constr Proofview.tactic) Proofview.tactic
+(** [open_constr_of_quasistring s context] behaves like [open_constr_of_string], except that
     antiquotations of the form [%{n}] are replaced by [context.(n)]. *)

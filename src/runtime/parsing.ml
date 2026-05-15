@@ -1,7 +1,6 @@
 (** API for parsing terms. *)
 
 open Names
-open Terms
 
 let parse ?loc entry s = Procq.parse_string ?loc entry s
 
@@ -33,33 +32,110 @@ let parse_match_pattern ?loc s = parse ?loc match_pattern s
 
 let glob_constr_of_string ?loc s =
   let parsed_term = parse_constrexpr ?loc s in
-  Glob_constr.of_constrexpr parsed_term
+  Terms.Glob_constr.of_constrexpr parsed_term
 
 let constr_of_string ?loc s =
   let parsed_term = parse_constrexpr ?loc s in
-  Constr.of_constrexpr parsed_term
+  Terms.Constr.of_constrexpr parsed_term
 
 let open_constr_of_string ?loc s =
   let parsed_term = parse_constrexpr ?loc s in
-  Open_constr.of_constrexpr parsed_term
+  Terms.Open_constr.of_constrexpr parsed_term
 
 let match_pattern_of_string ?loc s =
   let parsed_pattern = parse_match_pattern ?loc s in
-  Pattern.of_constrexpr parsed_pattern
+  Terms.Pattern.of_constrexpr parsed_pattern
 
 (** {1 Parsing with antiquotations} *)
 
+(** Representation of holes inside terms. *)
+type hole = Hole of int
+
+let circled_numbers =
+  [| "⓪" ; "①" ; "②" ; "③" ; "④" ; "⑤" ; "⑥" ; "⑦" ; "⑧" ; "⑨" ;
+     "⑩" ; "⑪" ; "⑫" ; "⑬" ; "⑭" ; "⑮" ; "⑯" ; "⑰" ; "⑱" ; "⑲" ;
+     "⑳" |]
+
+(** Pretty-printing representation of holes. *)
+let hole_name (Hole n) =
+  if n < Array.length circled_numbers then circled_numbers.(n) else "□[" ^ string_of_int n ^ "]"
+
+let parse_hole_name str =
+  match Array.find_index (String.equal str) circled_numbers with
+  | Some i -> Some (Hole i)
+  | None ->
+     let prefix = "□[" in
+     if String.starts_with ~prefix str then
+       let prefix_length = String.length prefix in
+       match int_of_string_opt (String.sub str prefix_length (String.length str - prefix_length - 1)) with
+       | Some i -> Some (Hole i)
+       | None -> None
+     else None
+
+(** Representation of globalized holes. We capture the globalization
+    environment, so that constrexprs substituted later can be reinterpreted
+    correctly. *)
+type globalized_hole = hole * Genintern.glob_sign
+
+(** Generic term for holes. *)
+let wit_hole : (hole, globalized_hole) GenConstr.tag =
+  GenConstr.create "ppx_rocq:hole"
+
+(** Internalize the given hole by capturing the globalization environment. *)
+let intern_hole ?loc glob_sign hole =
+  hole, glob_sign
+
+(** Convert the given globalized hole to a [constr] by interpreting it as an
+    evar. *)
+let interp_hole ?loc ~poly glob_env sigma tycon (Hole n, _) =
+  let env = GlobEnv.renamed_env glob_env in
+  let hole_name = hole_name (Hole n) in
+  let sigma, typ, relevance =
+    match tycon with
+    | Some typ -> sigma, typ, None
+    | None ->
+       let sigma, (typ, sort) =
+         Evarutil.new_type_evar
+           ~src:(loc, Evar_kinds.InternalHole)
+           ~naming:(Namegen.IntroIdentifier (Id.of_string_soft ("type of " ^ hole_name)))
+           env
+           sigma
+           Evd.univ_flexible in
+       let relevance = EConstr.ESorts.relevance_of_sort sort in
+       sigma, typ, Some relevance
+  in
+  let sigma, evar = Evarutil.new_evar
+                      ~src:(loc, Evar_kinds.InternalHole)
+                      ~naming:(Namegen.IntroIdentifier (Id.of_string_soft hole_name))
+                      ?relevance
+                      env
+                      sigma
+                      typ
+  in
+  Environ.make_judge evar typ, sigma
+
+
+let () =
+  Genintern.register_intern_constr wit_hole intern_hole;
+  GlobEnv.register_constr_interp0 wit_hole interp_hole;
+  Gensubst.register_constr_subst wit_hole (fun _ v -> v)
+
+let () =
+  let print_hole hole = Genprint.PrinterBasic (fun env sigma -> Pp.str (hole_name hole)) in
+  let print_glob_hole (hole, _) = print_hole hole in
+  Genprint.register_constr_print wit_hole print_hole print_glob_hole
+
+(** {2 Generic arguments} *)
+
 type genarg_antiquotation =
-  [ `Constr of constr       (** {v %{…} v} or {v %constr:{…} v} *)
-  | `Preterm of glob_constr (** {v %preterm:{…} v} *)
+  [ `Constr of Terms.constr       (** {v %{…} v} or {v %constr:{…} v} *)
+  | `Preterm of Terms.glob_constr (** {v %preterm:{…} v} *)
   ]
 
 type antiquotation =
   [ genarg_antiquotation
-  | `Expr of constrexpr (** {v %expr:{…} v} *)
+  | `Expr of Terms.constrexpr (** {v %expr:{…} v} *)
   ]
-
-(** {2 Generic arguments} *)
 
 (** As a performance optimization, we interpret {v %preterm:{…} v} and
     {v %constr:{…} v} as generic arguments, so that we don't have to
@@ -68,9 +144,12 @@ type antiquotation =
 let wit_antiquotation : (genarg_antiquotation, genarg_antiquotation) GenConstr.tag =
   GenConstr.create "ppx_rocq:antiquotation"
 
-(* Internalization is the identity function. *)
+let intern_antiquotation ?loc glob_sign (antiquotation: genarg_antiquotation) =
+  (* constr and preterm antiquotations are already internalized. *)
+  antiquotation
+
 let () =
-  Genintern.register_intern_constr wit_antiquotation (fun ?loc _ v -> v)
+  Genintern.register_intern_constr wit_antiquotation intern_antiquotation
 
 let interp_constr_antiquotation ?loc env sigma tycon c =
   let judgment = Retyping.get_judgment_of env sigma c in
@@ -100,13 +179,13 @@ let interp_preterm_antiquotation env sigma tycon t =
   in
   Environ.make_judge t ty, sigma
 
+let interp ?loc ~poly env sigma tycon =
+  let env = GlobEnv.renamed_env env in
+  function
+  | `Constr c -> interp_constr_antiquotation ?loc env sigma tycon c
+  | `Preterm t -> interp_preterm_antiquotation env sigma tycon t
+
 let () =
-  let interp ?loc ~poly env sigma tycon =
-    let env = GlobEnv.renamed_env env in
-    function
-    | `Constr c -> interp_constr_antiquotation ?loc env sigma tycon c
-    | `Preterm t -> interp_preterm_antiquotation env sigma tycon t
-  in
   GlobEnv.register_constr_interp0 wit_antiquotation interp
 
 (* Module substitution does not affect our antiquotations. *)
@@ -127,9 +206,9 @@ let () =
 (** {2 Camlp5 grammar tricks} *)
 
 (** Generic production rule for antiquotations:
-    [[ [ "%{"; n = natural; "}" -> { f n } ] ]]
+    [[ [ "%{"; n = natural; "}" -> { Hole n } ] ]]
  *)
-let antiquotation_production f =
+let antiquotation_production =
   let open Procq in
   Production.make
     (Rule.next
@@ -138,17 +217,17 @@ let antiquotation_production f =
              ((Symbol.token (Tok.PKEYWORD ("%{")))))
           ((Symbol.nterm Prim.natural)))
        ((Symbol.token (Tok.PKEYWORD ("}")))))
-    (fun _ n _ loc -> f ~loc n)
+    (fun _ n _ loc -> CAst.make ~loc (Constrexpr.CGenarg (Raw (wit_hole, Hole n))))
 
 (** Execute function [f] where [entry] allows anti-quotations in the map
     [context]. *)
-let with_antiquotations entry antiquotation_to_constrexpr f =
+let with_antiquotations entry f =
   with_synterp (fun () ->
     let grammar_state = Procq.freeze () in
     let () =
       Egramml.grammar_extend ~ignore_kw:false
         entry
-        (Reuse (Some "0", [antiquotation_production antiquotation_to_constrexpr]))
+        (Reuse (Some "0", [antiquotation_production]))
     in
     Fun.protect
       ~finally:(fun () -> Procq.unfreeze grammar_state)
@@ -157,26 +236,110 @@ let with_antiquotations entry antiquotation_to_constrexpr f =
 
 (** {2 Quasiparsing methods} *)
 
-let quasiparse_constrexpr ?loc s context =
-  let antiquotation_to_constrexpr ~loc : antiquotation -> constrexpr = function
+let quasiparse ?loc s =
+  with_antiquotations Procq.Constr.term (fun () -> parse_constrexpr ?loc s)
+
+open Proofview.Monad
+open Tactics
+
+let generic_quasiparse ~lower ~plug_holes ?loc s =
+  let parsed_term = quasiparse ?loc s in
+  lower parsed_term >>= fun lowered_term ->
+  return (fun values -> plug_holes lowered_term values)
+
+let get_raw : type raw glob. (raw, glob) GenConstr.tag -> GenConstr.raw -> raw option = fun t (Raw (tag, value)) ->
+  match GenConstr.eq t tag with
+  | Some Refl -> Some value
+  | None -> None
+
+let get_glob : type raw glob. (raw, glob) GenConstr.tag -> GenConstr.glb -> glob option = fun t (Glb (tag, value)) ->
+  match GenConstr.eq t tag with
+  | Some Refl -> Some value
+  | None -> None
+
+let quasiparse_constrexpr ?loc s =
+  let parsed_term = quasiparse ?loc s in
+  let open Constrexpr in
+  let plug_antiquotation ?loc : antiquotation -> Terms.constrexpr = function
     | `Expr e -> e
     | #genarg_antiquotation as antiquotation ->
-       let open Constrexpr in
        let genarg = CGenarg (GenConstr.Raw (wit_antiquotation, antiquotation)) in
-       CAst.make ~loc genarg
+       CAst.make ?loc genarg
   in
-  with_antiquotations Procq.Constr.term
-    (fun ~loc n -> antiquotation_to_constrexpr ~loc context.(n))
-    (fun () -> parse_constrexpr ?loc s)
+  let plug_holes constrexpr substitution =
+    let rec f constrexpr =
+      match constrexpr.CAst.v with
+      | CGenarg raw ->
+         begin match get_raw wit_hole raw with
+         | Some (Hole n) -> plug_antiquotation ?loc:constrexpr.loc (substitution.(n))
+         | None -> constrexpr
+         end
+      | _ -> Terms.Expr.map f constrexpr
+    in
+    f constrexpr
+  in
+  plug_holes parsed_term
 
-let glob_constr_of_quasistring ?loc s context =
-  let parsed_term = quasiparse_constrexpr ?loc s context in
-  Glob_constr.of_constrexpr parsed_term
+let glob_constr_of_quasistring =
+  let open Tactics in
+  let lower = Terms.Glob_constr.of_constrexpr in
+  let plug_hole ?loc glob_sign : antiquotation -> Terms.glob_constr = function
+    | `Expr e -> Constrintern.intern_core WithoutTypeConstraint glob_sign e
+    | `Preterm e -> e
+    | `Constr c as antiquotation ->
+       let open Glob_term in
+       let genarg = GGenarg (GenConstr.Glb (wit_antiquotation, antiquotation)) in
+       DAst.make ?loc genarg
+  in
+  let plug_holes glob_constr substitution =
+    let rec f glob_constr =
+      match DAst.get glob_constr with
+      | Glob_term.GGenarg glb ->
+         begin match get_glob wit_hole glb with
+         | Some (Hole n, glob_sign) ->
+            plug_hole ?loc:glob_constr.loc glob_sign (substitution.(n))
+         | None -> glob_constr
+         end
+      | _ -> Terms.Glob_constr.map f glob_constr
+    in
+    return (f glob_constr)
+  in
+  generic_quasiparse ~lower ~plug_holes
 
-let constr_of_quasistring ?loc s context =
-  let parsed_term = quasiparse_constrexpr ?loc s context in
-  Constr.of_constrexpr parsed_term
+let generic_constr_of_quasistring lower ?loc s =
+  let open Tactics in
+  let plug_hole : antiquotation -> Terms.constr Proofview.tactic = function
+    | `Expr e -> Terms.Constr.of_constrexpr e
+    | `Preterm e -> Terms.Constr.of_glob_constr e
+    | `Constr c -> return c
+  in
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let plug_holes constr substitution =
+    let* substitutions = Tactics.of_array (Array.map plug_hole substitution) in
+    let detect_hole evar =
+      match Evd.evar_ident evar sigma with
+      | Some fullpath ->
+         let name = Libnames.basename fullpath in
+         parse_hole_name (Id.to_string name)
+      | None -> None
+    in
+    let map = EConstr.map sigma in
+    let rec f constr =
+      match EConstr.kind sigma constr with
+      | Evar (e, _) ->
+         begin match detect_hole e with
+         | Some (Hole n) -> substitutions.(n)
+         | None -> constr
+         end
+      | _ -> map f constr
+    in
+    return (f constr)
+  in
+  generic_quasiparse ~lower ~plug_holes ?loc s
 
-let open_constr_of_quasistring ?loc s context =
-  let parsed_term = quasiparse_constrexpr ?loc s context in
-  Open_constr.of_constrexpr parsed_term
+let constr_of_quasistring =
+  generic_constr_of_quasistring Terms.Constr.of_constrexpr
+
+let open_constr_of_quasistring =
+  generic_constr_of_quasistring Terms.Open_constr.of_constrexpr

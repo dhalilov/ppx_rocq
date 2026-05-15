@@ -54,6 +54,9 @@ module Expr : sig
   val of_constr : constr -> t Proofview.tactic
   (** [of_constr c] converts a well-typed term [c] to its concrete syntax
       representation. *)
+
+  val map : (t -> t) -> t -> t
+  (** [map f c] maps every immediate subterm of [c] through function [f]. *)
 end
 
 module Glob_constr : sig
@@ -68,6 +71,9 @@ module Glob_constr : sig
   val of_constr : constr -> t Proofview.tactic
   (** [of_constr c] converts a well-typed term [c] to a globalized term by
       erasing its type information. *)
+
+  val map : (t -> t) -> t -> t
+  (** [map f c] maps every immediate subterm of [c] through function [f]. *)
 end
 
 module Constr : sig
