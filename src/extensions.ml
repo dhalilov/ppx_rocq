@@ -199,7 +199,7 @@ module Constr = struct
       | Some pattern ->
          (** Approximate the set of metavariables used by [pattern] at
              compilation-time by finding all occurrences of {v ?x v} or {v @?x v}.
-             Note that parsing is not available since Rocq is not loaded,
+             Note that parsing is not available since PPX runs as a process separated from Rocq,
              and therefore patterns such as {v ?x + ?y v} would fail to parse correctly. *)
          let bindings = find_all_pattern_vars ~loc:lhs_loc pattern in
          let bindings = List.map expand_pattern_var bindings in
