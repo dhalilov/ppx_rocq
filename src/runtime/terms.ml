@@ -17,78 +17,78 @@ module Expr = struct
   type t = constrexpr
 
   let of_glob_constr c =
-    with_env begin fun env sigma ->
-      let flags = (PrintingFlags.current ()).extern in
-      let extern_env = Constrextern.extern_env ~flags env sigma in
-      return (Constrextern.extern_glob_constr extern_env c)
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let flags = (PrintingFlags.current ()).extern in
+    let extern_env = Constrextern.extern_env ~flags env sigma in
+    return (Constrextern.extern_glob_constr extern_env c)
 
   let of_constr c =
-    with_env begin fun env sigma ->
-      let flags = PrintingFlags.current () in
-      return (Constrextern.extern_constr ~flags env sigma c)
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let flags = PrintingFlags.current () in
+    return (Constrextern.extern_constr ~flags env sigma c)
 end
 
 module Glob_constr = struct
   type t = glob_constr
 
   let of_constrexpr e =
-    with_env begin fun env sigma ->
-      return (Constrintern.intern_constr env sigma e)
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    return (Constrintern.intern_constr env sigma e)
 
   let of_constr c =
-    with_env begin fun env sigma ->
-      let flags = (PrintingFlags.current ()).detype in
-      return (Detyping.detype Detyping.Now ~flags env sigma c)
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let flags = (PrintingFlags.current ()).detype in
+    return (Detyping.detype Detyping.Now ~flags env sigma c)
 end
 
 module Constr = struct
   type t = constr
 
   let of_constrexpr e =
-    with_env begin fun env sigma ->
-      let constr, ustate = Constrintern.interp_constr env sigma e in
-      let sigma = Evd.merge_ustate sigma ustate in
-      Proofview.Unsafe.tclEVARS sigma >>
-      return constr
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let constr, ustate = Constrintern.interp_constr env sigma e in
+    let sigma = Evd.merge_ustate sigma ustate in
+    Proofview.Unsafe.tclEVARS sigma >>
+    return constr
 
   let of_glob_constr c =
-    with_env begin fun env sigma ->
-      let constr, ustate = Pretyping.understand env sigma c in
-      let sigma = Evd.merge_ustate sigma ustate in
-      Proofview.Unsafe.tclEVARS sigma >>
-      return constr
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let constr, ustate = Pretyping.understand env sigma c in
+    let sigma = Evd.merge_ustate sigma ustate in
+    Proofview.Unsafe.tclEVARS sigma >>
+    return constr
 end
 
 module Open_constr = struct
   type t = open_constr
 
   let of_constrexpr e =
-    with_env begin fun env sigma ->
-      let sigma, constr = Constrintern.interp_open_constr env sigma e in
-      Proofview.Unsafe.tclEVARS sigma >>
-      return constr
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let sigma, constr = Constrintern.interp_open_constr env sigma e in
+    Proofview.Unsafe.tclEVARS sigma >>
+    return constr
 
   let of_glob_constr e =
-    with_env begin fun env sigma ->
-      let sigma, econstr = Pretyping.understand_tcc env sigma e in
-      Proofview.Unsafe.tclEVARS sigma >>
-      return econstr
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let sigma, econstr = Pretyping.understand_tcc env sigma e in
+    Proofview.Unsafe.tclEVARS sigma >>
+    return econstr
 end
 
 module Pattern = struct
   type t = pattern
 
   let of_constrexpr e =
-    with_env begin fun env sigma ->
-      let _, pattern = Constrintern.interp_constr_pattern env sigma e in
-      return pattern
-    end
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let _, pattern = Constrintern.interp_constr_pattern env sigma e in
+    return pattern
 end

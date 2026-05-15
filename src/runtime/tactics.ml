@@ -3,18 +3,17 @@
 open Proofview.Monad
 let (let*) = Proofview.Monad.(>>=)
 
-let with_env t =
+let env =
   let* goals = Proofview.Goal.goals in
   match goals with
-  | [goal] ->
-     let* goal in
-     let env = Proofview.Goal.env goal in
-     let sigma = Proofview.Goal.sigma goal in
-     t env sigma
-  | _ ->
-     let* env = Proofview.tclENV in
-     let* sigma = Proofview.tclEVARMAP in
-     t env sigma
+  | [goal] -> let* goal in return (Proofview.Goal.env goal)
+  | _ -> Proofview.tclENV
+
+let evar_map =
+  let* goals = Proofview.Goal.goals in
+  match goals with
+  | [goal] -> let* goal in return (Proofview.Goal.sigma goal)
+  | _ -> Proofview.tclEVARMAP
 
 let memoize t =
   let res = ref None in
