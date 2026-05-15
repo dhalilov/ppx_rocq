@@ -3,6 +3,7 @@ open Ppxlib
 type antiquotation_kind =
   | Unspecified
   | Constr
+  | Open_constr
   | Preterm
   | Expr
 
@@ -23,13 +24,14 @@ let parse_expression s ~loc =
 
 let parse_antiquotation_kind = function
   | "constr:" -> Constr
+  | "open_constr:" -> Open_constr
   | "preterm:" -> Preterm
   | "expr:" -> Expr
   | _ -> assert false
 
 let rec parse ~loc s =
   let rec parse stream =
-    let literal, stream = CharStream.span ~pattern:{|%\(\(constr:\)\|\(preterm:\)\|\(expr:\)\)?{|} stream in
+    let literal, stream = CharStream.span ~pattern:{|%\(\(open_constr:\)|\(constr:\)\|\(preterm:\)\|\(expr:\)\)?{|} stream in
     if CharStream.is_empty stream then
       [Literal literal]
     else

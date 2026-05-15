@@ -69,6 +69,7 @@ let build_antiquotation_context bindings ~loc =
   let binding_to_expr (expr, typ) =
     match typ with
     | Quasiquotation.Unspecified | Constr -> [%expr `Constr ([%e expr]: EConstr.constr)]
+    | Open_constr -> [%expr `Open_constr ([%e expr]: EConstr.econstr)]
     | Preterm -> [%expr `Preterm ([%e expr]: Glob_term.glob_constr)]
     | Expr -> [%expr `Expr ([%e expr]: Constrexpr.constr_expr)]
   in

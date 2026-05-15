@@ -4,6 +4,7 @@ open Ppxlib
 type antiquotation_kind =
   | Unspecified (** [%{…}] *)
   | Constr      (** [%constr:{…}] *)
+  | Open_constr (** [%open_constr:{…}] *)
   | Preterm     (** [%preterm:{…}] *)
   | Expr        (** [%expr:{…}] *)
 

@@ -89,22 +89,23 @@ val match_pattern_of_string : ?loc:Loc.t -> string -> pattern Proofview.tactic
        according to the following table (“source” is the type of antiquotation,
        while “target” refers to the final desired term representation):
 
-       +-----------------+-------------+-------------+-------------+
-       | Source \ Target | constrexpr  | glob_constr |   constr    |
-       +-----------------+-------------+-------------+-------------+
-       | constrexpr      |  identity   | internalize |   interp    |
-       +-----------------+-------------+-------------+-------------+
-       | glob_constr     |  genarg     |   identity  |   pretype   |
-       +-----------------+-------------+-------------+-------------+
-       | constr          |  genarg     |   genarg    |   identity  |
-       +-----------------+-------------+-------------+-------------+
+       +-----------------+-------------+-------------+---------------+
+       | Source \ Target | constrexpr  | glob_constr | (open_)constr |
+       +-----------------+-------------+-------------+---------------+
+       | constrexpr      |  identity   | internalize |    interp     |
+       +-----------------+-------------+-------------+---------------+
+       | glob_constr     |  genarg     |   identity  |    pretype    |
+       +-----------------+-------------+-------------+---------------+
+       | (open_)constr   |  genarg     |   genarg    |    identity   |
+       +-----------------+-------------+-------------+---------------+
  *)
 
 (** Types of antiquotations. *)
 type antiquotation =
-  [ `Constr of constr       (** [%{…}] or [%constr:{…}] *)
-  | `Preterm of glob_constr (** [%preterm:{…}] *)
-  | `Expr of constrexpr     (** [%expr:{…}] *)
+  [ `Constr of constr           (** [%{…}] or [%constr:{…}] *)
+  | `Open_constr of open_constr (** [%open_constr:{…}] *)
+  | `Preterm of glob_constr     (** [%preterm:{…}] *)
+  | `Expr of constrexpr         (** [%expr:{…}] *)
   ]
 
 val quasiparse_constrexpr : ?loc:Loc.t -> string -> (antiquotation array -> constrexpr)

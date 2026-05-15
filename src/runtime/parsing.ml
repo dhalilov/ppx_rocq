@@ -128,8 +128,9 @@ let () =
 (** {2 Generic arguments} *)
 
 type genarg_antiquotation =
-  [ `Constr of Terms.constr       (** {v %{…} v} or {v %constr:{…} v} *)
-  | `Preterm of Terms.glob_constr (** {v %preterm:{…} v} *)
+  [ `Constr of Terms.constr           (** {v %{…} v} or {v %constr:{…} v} *)
+  | `Open_constr of Terms.open_constr (** {v %open_constr:{…} v} *)
+  | `Preterm of Terms.glob_constr     (** {v %preterm:{…} v} *)
   ]
 
 type antiquotation =
@@ -182,7 +183,7 @@ let interp_preterm_antiquotation env sigma tycon t =
 let interp ?loc ~poly env sigma tycon =
   let env = GlobEnv.renamed_env env in
   function
-  | `Constr c -> interp_constr_antiquotation ?loc env sigma tycon c
+  | `Constr c | `Open_constr c -> interp_constr_antiquotation ?loc env sigma tycon c
   | `Preterm t -> interp_preterm_antiquotation env sigma tycon t
 
 let () =
@@ -198,6 +199,7 @@ let () =
     Genprint.PrinterBasic (fun env sigma ->
       match antiquotation with
       | `Constr c -> str "%{" ++ Printer.pr_econstr_env env sigma c ++ str "}"
+      | `Open_constr c -> str "%open_constr:{" ++ Printer.pr_econstr_env env sigma c ++ str "}"
       | `Preterm t -> str "%preterm:{" ++ Printer.pr_glob_constr_env env sigma t ++ str "}"
     )
   in
@@ -286,7 +288,7 @@ let glob_constr_of_quasistring =
   let plug_hole ?loc glob_sign : antiquotation -> Terms.glob_constr = function
     | `Expr e -> Constrintern.intern_core WithoutTypeConstraint glob_sign e
     | `Preterm e -> e
-    | `Constr c as antiquotation ->
+    | (`Constr c | `Open_constr c) as antiquotation ->
        let open Glob_term in
        let genarg = GGenarg (GenConstr.Glb (wit_antiquotation, antiquotation)) in
        DAst.make ?loc genarg
@@ -311,7 +313,7 @@ let generic_constr_of_quasistring lower ?loc s =
   let plug_hole : antiquotation -> Terms.constr Proofview.tactic = function
     | `Expr e -> Terms.Constr.of_constrexpr e
     | `Preterm e -> Terms.Constr.of_glob_constr e
-    | `Constr c -> return c
+    | `Constr c | `Open_constr c -> return c
   in
   let* env = Tactics.env in
   let* sigma = Tactics.evar_map in
