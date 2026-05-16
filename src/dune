@@ -7,6 +7,7 @@
    ppx_rocq.lib
    ppx_rocq.runtime
    ppx_string
-   ppx_string.runtime)
+   ppx_string.runtime
+   sexplib)
  (ppx_runtime_libraries ppx_rocq.runtime ppx_string.runtime)
- (preprocess (pps ppxlib.metaquot)))
+ (preprocess (pps ppxlib.metaquot ppx_sexp_conv)))
