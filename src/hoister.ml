@@ -2,20 +2,24 @@
 
 open Ppxlib
 
-let hoist ~loc e =
-  [%expr [%e e] [@hoist]]
+let hoist ~loc ?name e =
+  match name with
+  | Some name ->
+     let name = Ast_builder.Default.estring ~loc name in
+     [%expr [%e e] [@hoist [%e name]]]
+  | None -> [%expr [%e e] [@hoist]]
 
 let hoisted_expressions_collector =
-  let hoist_attribute = Ast_pattern.(attribute ~name:(string "hoist") ~payload:(pstr nil)) in
+  let hoist_attribute = Ast_pattern.(attribute ~name:(string "hoist") ~payload:(alt_option (single_expr_payload (estring __)) (pstr nil))) in
   let expr_pattern = Ast_pattern.(pexp_attributes (hoist_attribute ^:: drop) __) in
   object
     inherit [structure_item list] Ast_traverse.fold_map as super
 
     method! expression expr acc =
       let loc = expr.pexp_loc in
-      match Ast_pattern.parse_res expr_pattern loc expr (fun unannotated -> unannotated) with
-      | Ok expr ->
-         let symbol = gen_symbol () in
+      match Ast_pattern.parse_res expr_pattern loc expr (fun prefix unannotated -> (prefix, unannotated)) with
+      | Ok (prefix, expr) ->
+         let symbol = gen_symbol ?prefix () in
          let variable = Ast_builder.Default.pvar ~loc symbol in
          let binding = [%stri let [%p variable] = [%e expr]] in
          (Ast_builder.Default.evar ~loc symbol, binding :: acc)

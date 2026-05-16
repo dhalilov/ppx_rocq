@@ -76,7 +76,7 @@ let build_antiquotation_context bindings ~loc =
   let bindings = List.map binding_to_expr bindings in
   Ast_builder.Default.pexp_array ~loc bindings
 
-let expand_antiquotation ~tactic_mode parser quasiparser ~ctxt string string_loc =
+let expand_antiquotation ?name ~tactic_mode parser quasiparser ~ctxt string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
   let template, bindings =
     Quasiquotation.parse ~loc:string_loc string |>
@@ -90,7 +90,7 @@ let expand_antiquotation ~tactic_mode parser quasiparser ~ctxt string string_loc
     if tactic_mode then [%expr Ppx_rocq_runtime.Tactics.memoize [%e parse_result]]
     else parse_result
   in
-  let parse_result = Hoister.hoist ~loc parse_result in
+  let parse_result = Hoister.hoist ~loc ?name parse_result in
   match bindings with
   | [] -> parse_result
   | _ ->
@@ -130,7 +130,7 @@ module Preterm = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_quasistring] in
-    expand_antiquotation ~tactic_mode:true parser quasiparser ~ctxt
+    expand_antiquotation ~name:"preterm" ~tactic_mode:true parser quasiparser ~ctxt
 
   let extension =
     Extension.V3.declare
@@ -160,7 +160,7 @@ module Constr = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.constr_of_string] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.constr_of_quasistring] in
-    expand_antiquotation ~tactic_mode:true parser quasiparser ~ctxt
+    expand_antiquotation ~name:"constr" ~tactic_mode:true parser quasiparser ~ctxt
 
   let string_pattern =
     let pattern = Ast_pattern.(pexp_constant (pconst_string __ __ drop)) in
@@ -205,8 +205,8 @@ module Constr = struct
          let bindings = find_all_pattern_vars ~loc:lhs_loc pattern in
          let bindings = List.map expand_pattern_var bindings in
          let pattern_expr = Ast_builder.Default.estring ~loc:lhs_loc pattern in
-         Hoister.hoist ~loc [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] [%e pattern_expr])], bindings
-      | None -> Hoister.hoist ~loc [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] "_")], []
+         Hoister.hoist ~loc ~name:"pattern" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] [%e pattern_expr])], bindings
+      | None -> Hoister.hoist ~loc ~name:"wildcard" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] "_")], []
     in
     let rhs = [%expr fun subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]] in
     [%expr ([%e lhs], [%e rhs])]
@@ -254,7 +254,7 @@ module Open_constr = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.open_constr_of_string] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.open_constr_of_quasistring] in
-    expand_antiquotation ~tactic_mode:true parser quasiparser ~ctxt
+    expand_antiquotation ~name:"open_constr" ~tactic_mode:true parser quasiparser ~ctxt
 
   let extension =
     Extension.V3.declare
