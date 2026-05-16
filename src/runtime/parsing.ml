@@ -196,25 +196,6 @@ let glob_constr_of_quasistring ?loc s =
                          (fun ?loc n glob_sign -> antiquotation_to_glob_constr ?loc glob_sign substitutions.(n))
                          partial_glob_constr)
 
-let constr_of_quasistring ?loc s =
-  let partial_term = parse_with_holes ?loc s in
-  (* Allow evars in the partially interpreted constr, since holes may negatively
-     impact type inference. *)
-  let* partial_constr = Terms.Open_constr.of_constrexpr partial_term in
-  return (fun substitutions ->
-    let antiquotation_to_constr : antiquotation -> Terms.constr Proofview.tactic = function
-        | `Expr e -> Terms.Constr.of_constrexpr e
-        | `Preterm e -> Terms.Constr.of_glob_constr e
-        | `Constr c | `Open_constr c -> return c
-    in
-    (* Evaluate substitutions eagerly, so that we can use [Hole.fill_constr_holes] *)
-    let* substitutions = Tactics.of_array (Array.map antiquotation_to_constr substitutions) in
-    let* constr = Hole.fill_constr_holes (fun n -> substitutions.(n)) partial_constr in
-    (* Make sure that there is no evar remaining after substitutions. *)
-    let* sigma = evar_map in
-    return (EConstr.of_constr @@ EConstr.to_constr ~abort_on_undefined_evars:true sigma constr)
-  )
-
 let open_constr_of_quasistring ?loc s =
   let partial_term = parse_with_holes ?loc s in
   let* partial_constr = Terms.Open_constr.of_constrexpr partial_term in
@@ -228,3 +209,7 @@ let open_constr_of_quasistring ?loc s =
     let* substitutions = Tactics.of_array (Array.map antiquotation_to_open_constr substitutions) in
     Hole.fill_constr_holes (fun n -> substitutions.(n)) partial_constr
   )
+
+let constr_of_quasistring ?loc s =
+  (* FIXME: We should trigger an open_constr -> constr translation. *)
+  open_constr_of_quasistring ?loc s
