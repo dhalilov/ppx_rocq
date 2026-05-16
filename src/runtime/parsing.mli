@@ -112,7 +112,7 @@ val quasiparse_constrexpr : ?loc:Loc.t -> string -> (antiquotation array -> cons
 (** [quasiparse_constrexpr s context] behaves like [parse_constexpr s], except that
     antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
-val glob_constr_of_quasistring : ?loc: Loc.t -> string -> (antiquotation array -> glob_constr Proofview.tactic) Proofview.tactic
+val glob_constr_of_quasistring : ?loc: Loc.t -> string -> (antiquotation array -> glob_constr) Proofview.tactic
 (** [glob_constr_of_quasistring s context] behaves like [glob_constr_of_string s],
     except that antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
