@@ -3,5 +3,6 @@
  (public_name ppx_rocq.runtime)
  (synopsis "Runtime for ppx_rocq")
  (libraries
+   ppx_string.runtime
    rocq-runtime.plugins.ltac
    rocq-runtime.plugins.ltac2))

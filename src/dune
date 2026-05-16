@@ -5,6 +5,8 @@
  (libraries
    ppxlib
    ppx_rocq.lib
-   ppx_rocq.runtime)
- (ppx_runtime_libraries ppx_rocq.runtime)
- (preprocess (pps ppxlib.metaquot ppx_string)))
+   ppx_rocq.runtime
+   ppx_string
+   ppx_string.runtime)
+ (ppx_runtime_libraries ppx_rocq.runtime ppx_string.runtime)
+ (preprocess (pps ppxlib.metaquot)))

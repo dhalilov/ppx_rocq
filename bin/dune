@@ -1,7 +1,7 @@
 (executable
  (name main)
  (link_flags -linkall)
- (libraries ppx_rocq ppx_rocq.runtime ppxlib))
+ (libraries ppx_rocq ppxlib))
 
 (install
  (section bin)
