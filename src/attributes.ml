@@ -28,26 +28,29 @@ module Compiler_options = struct
     Context_free.Rule.attr_str_floating_expect_and_expand attribute expand
 end
 
+let () = Findlib.init ()
+
+let check_library lib =
+  let packages = Findlib.list_packages' () in
+  if List.mem lib packages then Ok ()
+  else Error (Spellcheck.spellcheck packages lib)
+
 module Library_options = struct
   module Property =
     Driver.Create_file_property
       (struct let name = "libraries" end)
       (struct type t = string list [@@deriving sexp] end)
 
-  let () = Findlib.init ()
-
   (** Check that the library exists using [ocamlfind], otherwise embed an error node. *)
   let check_lib { txt = lib; loc } =
-    let packages = Findlib.list_packages' () in
-    if List.mem lib packages then lib
-    else
-      (* TODO: Embed the error instead of raising. It currently does not work
-         because PPX complains about a missing [@@@ppxlib.inline.end] *)
-      match Spellcheck.spellcheck packages lib with
-      | Some suggestion ->
-         Location.raise_errorf ~loc "Could not find package %s.\n%s" lib suggestion
-      | None ->
-         Location.raise_errorf ~loc "Could not find package %s." lib
+    match check_library lib with
+    | Ok () -> lib
+    | Error (Some suggestion) ->
+       (* TODO: Embed the error instead of raising. It currently does not work
+          because PPX complains about a missing [@@@ppxlib.inline.end] *)
+       Location.raise_errorf ~loc "Could not find package %s.\n%s" lib suggestion
+    | Error None ->
+       Location.raise_errorf ~loc "Could not find package %s." lib
 
   let expand ~ctxt libs =
     let libs = List.map check_lib libs in
@@ -66,12 +69,46 @@ module Library_options = struct
     Context_free.Rule.attr_str_floating_expect_and_expand attribute expand
 end
 
+(** [[@@@ppx]] floating attribute, used to adds preprocessors. *)
+module Ppx_options = struct
+  module Property =
+    Driver.Create_file_property
+      (struct let name = "ppx" end)
+      (struct type t = string list [@@deriving sexp] end)
+
+  (** Check that the PPX exists using [ocamlfind], otherwise embed an error node. *)
+  let check_ppx { txt = ppx; loc } =
+    match check_library ppx with
+    | Ok () -> ppx
+    | Error (Some suggestion) ->
+       Location.raise_errorf ~loc "Could not find PPX named %s.\n%s" ppx suggestion
+    | Error None ->
+       Location.raise_errorf ~loc "Could not find PPX named %s." ppx
+
+  let expand ~ctxt ppx_list =
+    let ppx_list = List.map check_ppx ppx_list in
+    Property.set ppx_list;
+    []
+
+  let pattern =
+    let ppx = Ast_pattern.(estring __') in
+    let ppx_list = Ast_utils.comma_separated ppx in
+    Ast_pattern.single_expr_payload ppx_list
+
+  let attribute =
+    Attribute.Floating.(declare "mltac.ppx" Context.structure_item pattern Fun.id)
+
+  let rule =
+    Context_free.Rule.attr_str_floating_expect_and_expand attribute expand
+end
+
 (**/**)
 
 let () =
   Ppxlib.Driver.register_transformation
     ~rules:[
       Compiler_options.rule;
+      Ppx_options.rule;
       Library_options.rule
     ]
     "mltac.attributes"
