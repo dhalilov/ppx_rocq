@@ -20,7 +20,7 @@ let nat_plus_assoc = [%constr "forall x y z : nat, %expr:{lhs} = %expr:{rhs}"] ;
 
 To use `ppx_rocq`, run `dune install` on this repository:
 ```bash
-git clone …
+git clone https://github.com/epfl-systemf/ppx_rocq.git
 cd ppx_rocq
 dune build
 dune install
