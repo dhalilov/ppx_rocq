@@ -17,12 +17,9 @@ module Compiler_options = struct
     []
 
   let pattern =
-    let library = Ast_pattern.(estring __) in
-    let libraries = Ast_pattern.(
-        alt
-          (map ~f:(fun f lib -> f [lib]) library)
-          (pexp_tuple (many library))) in
-    Ast_pattern.single_expr_payload libraries
+    let option = Ast_pattern.(estring __) in
+    let options = Ast_utils.comma_separated option in
+    Ast_pattern.single_expr_payload options
 
   let attribute =
     Attribute.Floating.(declare "mltac.compiler" Context.structure_item pattern Fun.id)
@@ -34,7 +31,7 @@ end
 module Library_options = struct
   module Property =
     Driver.Create_file_property
-      (struct let name = "libs" end)
+      (struct let name = "libraries" end)
       (struct type t = string list [@@deriving sexp] end)
 
   let () = Findlib.init ()
@@ -59,10 +56,7 @@ module Library_options = struct
 
   let pattern =
     let library = Ast_pattern.(estring __') in
-    let libraries = Ast_pattern.(
-        alt
-          (map ~f:(fun f lib -> f [lib]) library)
-          (pexp_tuple (many library))) in
+    let libraries = Ast_utils.comma_separated library in
     Ast_pattern.single_expr_payload libraries
 
   let attribute =
