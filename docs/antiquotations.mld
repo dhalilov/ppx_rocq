@@ -1,0 +1,7 @@
+@short_title Antiquotations
+
+{0 Antiquotations}
+
+An {e antiquotation} is part of a {{!page-quotations}quotation} that is replaced by an OCaml expression, called the {e antiquoted} value. In [ppx_rocq], antiquotations are written as [%{…}] or [%kind:{…}], where the ellipsis is any well-formed OCaml expression.
+
+Antiquotations are {e strongly-typed}, meaning that antiquoted values have a single valid type that is checked at compile-time. Regular antiquotations [%{…}] expect antiquoted {{!page-quotations.constr}[constr]} values. Other types of antiquoted values are specified using the [%kind:{…}] syntax, e.g., [%preterm:{…}] accepts antiquoted value of type {{!page-quotations.constr}[preterm]} ([%{…}] is short-hand for [%constr:{…}]).

@@ -1,0 +1,114 @@
+{0 Quotations}
+
+A {e quotation} is a mechanism for entering Rocq syntax in OCaml. They are used to build Rocq constructs using a natural syntax.
+
+We make the distinction between {{!section-term}{e term quotations}}, which are used to input Rocq terms, and other quotations such as {{!section-ident}[[%ident "…"]]}. This distinction is important for {{!page-antiquotations}antiquotations}, since terms antiquotations ([%constr:{…}], [%preterm:{…}], etc.) are only allowed in term quotations.
+
+{1 General design}
+
+Every quotation follows a similar structure:
+
+- The quotation is of the form [[%kind payload]], where [payload] must be a constant string.
+- The payload string is scanned {e statically} for {{!page-antiquotations}antiquotations}.
+- Each antiquotation is checked for validity (i.e. whether the kind is correct and the antiquotation can appear here); mispelled and erroneous antiquotation kinds are reported at this step.
+- The antiquoted value is extracted and type-checked against the expected type of the antiquotation.
+
+
+{1:term Term quotations}
+
+Terms quotations designate quotations that build Rocq terms: {{!section-constr}[[%constr "…"]]} for well-typed terms, {{!section-preterm}[[%preterm "…"]]} for untyped terms, and {{!section-expr}[[%expr "…"]]} for concrete syntax AST terms.
+
+{2:constr [[%constr "…"]]}
+
+Builds a well-typed term from the input string. The type of [[%constr "…"]] is [constr tactic]; we recommend binding its value using the monadic [let*].
+
+All term antiquotations are allowed in [[%constr "…"]] quotations.
+
+{%html:
+<style>
+.admonition {
+  border-left: 4px solid #d0d7de;
+  background: #f6f8fa;
+  padding: 12px 16px;
+  margin: 16px 0;
+  color: #24292f;
+}
+
+.admonition-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* WARNING VARIANT */
+.admonition-warning {
+  border-left-color: #9a6700;
+  background: #fff8f8;
+}
+
+.admonition-warning .admonition-title {
+  color: #9a6700;
+}
+
+/* Optional icon (GitHub-like emoji style) */
+.admonition-warning .admonition-title::before {
+  content: "⚠️";
+  font-size: 14px;
+}
+</style>
+<div class="admonition admonition-warning">
+  <p class="admonition-title">Warning</p>
+  <p class="admonition-content">
+%}
+[[%constr]] does not allow unbound variables, so the following raises at runtime:
+{@ocaml[
+[%constr "x"] (* x not found *)
+]}
+Moreover, antiquotations are capture-avoiding, meaning that they cannot reference outer binders:
+{@ocaml[
+let lhs = [%expr "x + y"] in
+let rhs = [%expr "y + x"] in
+[%constr "forall x y : nat, %expr:{lhs} = %expr:{rhs}"] (* x not found *)
+]}
+Variable capture can be implemented by delaying the interpretation of the term:
+{@ocaml[
+let lhs = [%expr "x + y"] in
+let rhs = [%expr "y + x"] in
+let t = [%expr "forall x y : nat, %expr:{lhs} = %expr:{rhs}"] in
+Terms.Constr.of_constrexpr t (* Works as expected *)
+]}
+{%html:
+  </p>
+</div>
+%}
+
+{2:open_constr [[%open_constr "…"]]}
+
+Similar to {{!section-constr}[[%constr "…"]]}, except that {{:https://rocq-prover.org/doc/master/refman/language/extensions/evars.html}existential variables} are allowed in the resulting term.
+
+{2:preterm [[%preterm "…"]]}
+
+Builds an untyped term from the input string. The type of [[%preterm "…"]] is [glob_constr tactic]; we recommend binding its value using the monadic [let*].
+
+{2:expr [[%expr "…"]]}
+
+Builds a concrete syntax AST term by parsing the input string. [[%expr "…"]] quotations can be used in cases where one wants to describe terms purely syntactically, without the cost of internalization or type inference.
+
+To convert an AST term obtained by [[%expr "…"]] to a {{!section-preterm}[preterm]}, {{!section-constr}[constr]}, or {{!section-open_constr}[open_constr]}, use the tactics in the [Terms] module:
+{@ocaml[
+Terms.Glob_constr.of_constrexpr [%expr "…"] (* equiv. to [%preterm "…"] *)
+Terms.Constr.of_constrexpr      [%expr "…"] (* equiv. to [%constr "…"] *)
+Terms.Open_constr.of_constrexpr [%expr "…"] (* equiv. to [%open_constr "…"] *)
+]}
+
+{1:other Other quotations}
+
+{2:ident [[%ident "…"]]}
+
+Builds an identifier from the given string. [[%ident "…"]] interprets antiquotations of the form [%{…}] as {e string interpolation}: the antiquoted value must be a string. No other antiquotation is allowed.
+
+{2:qualid [[%qualid "…"]]}
+
+Similar to {{!section-ident}[[%ident "…"]]}, except that the identifier may be qualified.
