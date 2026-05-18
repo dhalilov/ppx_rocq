@@ -1,0 +1,5 @@
+{0 Implementation details}
+
+This page describes implementation details that are of interest to developers browsing the source code of [ppx_rocq].
+
+{1 Antiquotations}

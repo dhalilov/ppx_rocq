@@ -1,0 +1,24 @@
+{0 [ppx_rocq]: PPX syntax extensions for quoting Rocq terms in OCaml}
+
+This manual describes the [ppx_rocq] package and its features.
+
+Installation instructions for [ppx_rocq] are available in the {{!page-getting_started.install}Getting started} page.
+For a quick look at the syntax, have a look at the {{!page-cheatsheet}cheatsheet}.
+
+{1:overview What is [ppx_rocq]?}
+
+[ppx_rocq] is a PPX rewriter for inputting Rocq terms in OCaml code using a natural syntax. It provides a set of syntax extensions ([%constr], [%preterm], etc.) modeled after Ltac2, and rewrites them into appropriate calls to Rocq's parser, internalizer and type-checker (as described in {{:https://rocq-prover.org/doc/master/refman/language/extensions/compil-steps.html#term-level-processing}Rocq's reference manual}).
+
+[ppx_rocq] supports various features:
+
+- {{!page-quotations}Term quotations}: [[%constr "…"]], [[%preterm "…"]], [[%open_constr "…"]], etc.
+- {{!page-antiquotations}Antiquotations}, e.g., [[%constr "%{x} + %{y}"]] for two OCaml expressions [x] and [y] ([constr:($x + $y)] in Ltac2)
+- {{!page-pattern_matching}Pattern-matching} over terms
+
+{2 How does it work?}
+
+[ppx_rocq] preprocesses your files at {i compile}-time: it recognizes a specific set of extension nodes in the OCaml AST and replaces them by generated code. For example, [ppx_rocq] will expand expressions of the form [[%constr …]], as long as the expression inside the brackets is a constant string (it will gracefully fail with an error otherwise).
+
+Some node expansions can alter the structure of the program in more radical ways. This is the case for pattern-matching, which desugars the [match] to a function call and introduces closures around every branch of the [match]. Another example is that of quotations, which are hoisted for performance (as described in the {{!page-implementation}Implementation} page).
+
+Preprocessing is done for you by your build system; instructions for setting up [ppx_rocq] with Dune are available in the {{!page-getting_started.dune}Getting started} page.

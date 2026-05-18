@@ -1,0 +1,30 @@
+{0 Getting started}
+
+{1:install Installation}
+
+The recommended way to install [ppx_rocq] and its dependencies is through [opam].
+
+{2:opam Using [opam]}
+
+{@bash[
+git clone git+github.com:epfl-systemf/ppx_rocq.git
+cd ppx_rocq
+opam install .
+]}
+
+{1:dune Using [ppx_rocq] with Dune}
+
+To use [ppx_rocq], add [ppx_rocq] to the [preprocess] field of your [library] or [executable] stanza:
+{@dune[
+(library
+  (name your_library)
+  (preprocess (pps ppx_rocq)))
+]}
+
+To test whether your installation was successful, the following snippet should print [Hello from ppx_rocq!]:
+{@ocaml[
+let () = 
+  let world = "from ppx_rocq" in
+  let id = [%ident "Hello %{world}!"] in
+  print_string (Names.Id.to_string id)
+]}
