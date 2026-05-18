@@ -26,7 +26,7 @@ dune build
 dune install
 ```
 
-Then add `ppx_rocq` to the `preprocessing` stanza of your Dune file:
+Then add `ppx_rocq` to the `preprocessing` field of your `library` or `executable` stanza:
 
 ```dune
 (library
