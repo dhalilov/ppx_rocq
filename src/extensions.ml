@@ -208,7 +208,11 @@ module Constr = struct
          Hoister.hoist ~loc ~name:"pattern" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] [%e pattern_expr])], bindings
       | None -> Hoister.hoist ~loc ~name:"wildcard" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] "_")], []
     in
-    let rhs = [%expr fun subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]] in
+    let rhs =
+      match bindings with
+      | [] -> [%expr fun _ -> [%e rhs]]
+      | _ -> [%expr fun subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]]
+    in
     [%expr ([%e lhs], [%e rhs])]
 
   let expand_match ~ctxt ~scrutinee ~cases =
