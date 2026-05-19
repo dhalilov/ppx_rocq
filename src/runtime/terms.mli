@@ -19,8 +19,12 @@ open Tactics
       preferred representation of well-typed terms in tactics, as such a map is
       provided by the tactic monad.
 
-    - {!Constr.t} is the kernel representation of terms. We should never
-      manipulate it and always use {!EConstr.constr} instead.
+    - {!Constr.t} is the kernel representation of terms. We should almost never
+      manipulate it and always use {!EConstr.constr} in tactics instead.
+
+    The different term representation are described in more details in
+    {{:https://rocq-prover.org/doc/master/refman/language/extensions/compil-steps.html#term-level-processing}Rocq's
+    reference manual}.
  *)
 
 type constrexpr = Constrexpr.constr_expr
@@ -84,7 +88,7 @@ module Constr : sig
   (** [of_constrexpr e] globalizes the concrete syntax term [e] and perform
       type inference as well as type-checking on the globalized term.
 
-      [of_constrexpr e] is equivalent to [of_glob_constr (Glob_constr.of_constrexpr e)]. *)
+      [of_constrexpr e] is equivalent to [let* c = Glob_constr.of_constrexpr e in of_glob_constr c]. *)
 
   val of_glob_constr : glob_constr -> t Proofview.tactic
   (** [of_glob_constr c] perform type inference and type-checks the globalized term [c]. *)

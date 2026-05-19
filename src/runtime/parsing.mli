@@ -89,15 +89,13 @@ val match_pattern_of_string : ?loc:Loc.t -> string -> pattern Proofview.tactic
        according to the following table (“source” is the type of antiquotation,
        while “target” refers to the final desired term representation):
 
-       +-----------------+-------------+-------------+---------------+
-       | Source \ Target | constrexpr  | glob_constr | (open_)constr |
-       +-----------------+-------------+-------------+---------------+
-       | constrexpr      |  identity   | internalize |    interp     |
-       +-----------------+-------------+-------------+---------------+
-       | glob_constr     |  genarg     |   identity  |    pretype    |
-       +-----------------+-------------+-------------+---------------+
-       | (open_)constr   |  genarg     |   genarg    |    identity   |
-       +-----------------+-------------+-------------+---------------+
+       {t
+         | Source \ Target | constrexpr  | glob_constr | (open_)constr |
+         | :-------------: | :---------: | :---------: | :-----------: |
+         | constrexpr      | identity    | internalize | interp        |
+         | glob_constr     | genarg      | identity    | pretype       |
+         | (open_)constr   | genarg      | genarg      | identity      |
+       }
  *)
 
 (** Types of antiquotations. *)
@@ -113,13 +111,14 @@ val quasiparse_constrexpr : ?loc:Loc.t -> string -> (antiquotation array -> cons
     antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
 val glob_constr_of_quasistring : ?loc: Loc.t -> string -> (antiquotation array -> glob_constr) Proofview.tactic
-(** [glob_constr_of_quasistring s context] behaves like [glob_constr_of_string s],
+(** [let* f = glob_constr_of_quasistring s in f context] behaves like [glob_constr_of_string s],
     except that antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
 val constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array -> constr Proofview.tactic) Proofview.tactic
-(** [constr_of_quasistring s context] behaves like [constr_of_string s], except that
+(** [let* f = constr_of_quasistring s in f context] behaves like [constr_of_string s], except that
     antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
 
 val open_constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array -> open_constr Proofview.tactic) Proofview.tactic
-(** [open_constr_of_quasistring s context] behaves like [open_constr_of_string], except that
-    antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
+(** [let* f = open_constr_of_quasistring s in f context] behaves like
+    [let* f = constr_of_string s in f context], except that antiquotations of
+    the form [%{n}] are replaced by [context.(n)]. *)
