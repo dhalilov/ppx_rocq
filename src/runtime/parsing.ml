@@ -177,7 +177,7 @@ let quasiparse_constrexpr ?loc s =
        CAst.make ?loc genarg
   in
   fun substitutions -> Hole.fill_holes
-                         (fun ?loc n -> antiquotation_to_constrexpr ?loc substitutions.(n))
+                         (fun ?loc (Hole n) -> antiquotation_to_constrexpr ?loc substitutions.(n))
                          partial_term
 
 let glob_constr_of_quasistring ?loc s =
@@ -193,7 +193,7 @@ let glob_constr_of_quasistring ?loc s =
   in
   let* partial_glob_constr = Terms.Glob_constr.of_constrexpr partial_term in
   return (fun substitutions -> Hole.fill_glob_holes
-                         (fun ?loc n glob_sign -> antiquotation_to_glob_constr ?loc glob_sign substitutions.(n))
+                         (fun ?loc (Hole n) glob_sign -> antiquotation_to_glob_constr ?loc glob_sign substitutions.(n))
                          partial_glob_constr)
 
 let open_constr_of_quasistring ?loc s =
@@ -207,7 +207,7 @@ let open_constr_of_quasistring ?loc s =
     in
     (* Evaluate substitutions eagerly, so that we can use [Hole.fill_constr_holes] *)
     let* substitutions = Tactics.of_array (Array.map antiquotation_to_open_constr substitutions) in
-    Hole.fill_constr_holes (fun n -> substitutions.(n)) partial_constr
+    Hole.fill_constr_holes (fun (Hole n) -> substitutions.(n)) partial_constr
   )
 
 let constr_of_quasistring ?loc s =

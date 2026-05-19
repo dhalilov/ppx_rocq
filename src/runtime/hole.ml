@@ -96,7 +96,7 @@ let find_hole t =
 
 let rec fill_holes f t =
   match find_hole t.CAst.v with
-  | Some (Hole n) -> f ?loc:t.loc n
+  | Some hole -> f ?loc:t.loc hole
   | None -> Terms.Expr.map (fill_holes f) t
 
 let find_glob_hole t =
@@ -111,7 +111,7 @@ let find_glob_hole t =
 
 let rec fill_glob_holes f t =
   match find_glob_hole (DAst.get t) with
-  | Some (Hole n, glob_sign) -> f ?loc:t.loc n glob_sign
+  | Some (Hole n, glob_sign) -> f ?loc:t.loc (Hole n) glob_sign
   | None -> Terms.Glob_constr.map (fill_glob_holes f) t
 
 let parse_hole_name str =
@@ -138,7 +138,7 @@ let find_constr_hole sigma t =
 let fill_constr_holes f t =
   let rec fill_constr_holes sigma f t =
     match find_constr_hole sigma t with
-    | Some n -> f n
+    | Some n -> f (Hole n)
     | None -> EConstr.map sigma (fill_constr_holes sigma f) t
   in
   let* sigma = evar_map in
