@@ -7,11 +7,11 @@ For a quick look at the syntax, have a look at the {{!page-cheatsheet}cheatsheet
 
 {1:overview What is [ppx_rocq]?}
 
-[ppx_rocq] is a PPX rewriter for inputting Rocq terms in OCaml code using a natural syntax. It provides a set of syntax extensions ([%constr], [%preterm], etc.) modeled after Ltac2, and rewrites them into appropriate calls to Rocq's parser, internalizer and type-checker (as described in {{:https://rocq-prover.org/doc/master/refman/language/extensions/compil-steps.html#term-level-processing}Rocq's reference manual}).
+[ppx_rocq] is a PPX rewriter for inputting Rocq terms in OCaml code using a natural syntax. It provides a set of syntax extensions ({{!page-quotations.constr}[%constr]}, {{!page-quotations.preterm}[%preterm]}, etc.) modeled after {{:https://rocq-prover.org/doc/master/refman/proof-engine/ltac2.html}Ltac2}, and rewrites them into appropriate calls to Rocq's parser, internalizer and type-checker (as described in {{:https://rocq-prover.org/doc/master/refman/language/extensions/compil-steps.html#term-level-processing}Rocq's reference manual}).
 
 [ppx_rocq] supports various features:
 
-- {{!page-quotations}Term quotations}: [[%constr "…"]], [[%preterm "…"]], [[%open_constr "…"]], etc.
+- {{!page-quotations}Term quotations}: {{!page-quotations.constr}[[%constr "…"]]}, {{!page-quotations.preterm}[[%preterm "…"]]}, {{!page-quotations.open_constr}[[%open_constr "…"]]}, etc.
 - {{!page-antiquotations}Antiquotations}, e.g., [[%constr "%{x} + %{y}"]] for two OCaml expressions [x] and [y] ([constr:($x + $y)] in Ltac2)
 - {{!page-pattern_matching}Pattern-matching} over terms
 
