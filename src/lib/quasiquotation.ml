@@ -11,16 +11,14 @@ type fragment =
 | Literal of string
 | Antiquoted of antiquotation_kind * expression
 
-let make_error ~loc fmt args =
-  Ast_builder.Default.pexp_extension ~loc @@
-    Location.error_extensionf ~loc fmt args
-
 let parse_expression s ~loc =
   let lexbuf = Lexing.from_string s in
   Lexing.set_position lexbuf loc.loc_start;
   Lexing.set_filename lexbuf loc.loc_start.pos_fname;
   try Parse.expression lexbuf
-  with _ -> make_error ~loc "Invalid antiquotation: %S" s
+  with _ ->
+    (* TODO: Report the parsing error. *)
+    Ast_diagnostics.error ~loc "Invalid expression: %S" s
 
 let parse_antiquotation_kind = function
   | "constr:" -> Constr
@@ -43,7 +41,7 @@ let rec parse ~loc s =
       let stream = CharStream.advance ~n:(String.length matched_start) stream in
       let antiquotation, stream = CharStream.located_span ~pattern:"}" stream in
       if CharStream.is_empty stream then
-        let error = make_error ~loc:antiquotation.loc "Unclosed antiquotation: %S" antiquotation.txt in
+        let error = Ast_diagnostics.error ~loc:antiquotation.loc "Unclosed antiquotation: %S" antiquotation.txt in
         [Literal literal; Antiquoted (antiquotation_kind, error)]
       else
         let stream = CharStream.advance ~n:1 stream in
