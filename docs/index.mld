@@ -19,6 +19,6 @@ For a quick look at the syntax, have a look at the {{!page-cheatsheet}cheatsheet
 
 [ppx_rocq] preprocesses your files at {i compile}-time: it recognizes a specific set of extension nodes in the OCaml AST and replaces them by generated code. For example, [ppx_rocq] will expand expressions of the form [[%constr …]], as long as the expression inside the brackets is a constant string (it will gracefully fail with an error otherwise).
 
-Some node expansions can alter the structure of the program in more radical ways. This is the case for pattern-matching, which desugars the [match] to a function call and introduces closures around every branch of the [match]. Another example is that of quotations, which are hoisted for performance (as described in the {{!page-implementation}Implementation} page).
+Some node expansions alter the structure of the program in more subtle ways to obtain the expected semantics. This is the case for pattern-matching, which desugars the [match] to a function call and introduces closures around every branch of the [match]. Another example is that of quotations, which are hoisted for performance (as described in the {{!page-implementation}Implementation} page).
 
 Preprocessing is done for you by your build system; instructions for setting up [ppx_rocq] with Dune are available in the {{!page-getting_started.dune}Getting started} page.
