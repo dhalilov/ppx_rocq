@@ -104,4 +104,6 @@ module Pattern = struct
     let* sigma = Tactics.evar_map in
     let _, pattern = Constrintern.interp_constr_pattern env sigma e in
     return pattern
+
+  let wildcard = Pattern.PMeta None
 end

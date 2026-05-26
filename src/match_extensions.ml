@@ -30,7 +30,7 @@ let expand_case ~loc { lhs = { txt = lhs; loc = lhs_loc }; rhs = { txt = rhs; lo
        let bindings = List.map expand_pattern_var bindings in
        let pattern_expr = Ast_builder.Default.estring ~loc:lhs_loc pattern in
        Hoister.hoist ~loc ~name:"pattern" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] [%e pattern_expr])], bindings
-    | None -> Hoister.hoist ~loc ~name:"wildcard" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] "_")], []
+    | None -> [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], []
   in
   let rhs =
     match bindings with
