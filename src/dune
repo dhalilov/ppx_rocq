@@ -4,7 +4,6 @@
  (kind ppx_rewriter)
  (libraries
    ppxlib
-   ppx_rocq.lib
    ppx_rocq.runtime
    ppx_string
    ppx_string.runtime)

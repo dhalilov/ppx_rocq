@@ -1,7 +1,6 @@
 (** Extension nodes for quoting Rocq code. *)
 
 open Ppxlib
-open Ppx_rocq_lib
 open Expansion_helpers
 
 (** {1 Extensions with string interpolation} *)
