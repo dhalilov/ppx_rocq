@@ -32,3 +32,17 @@ let with_let_bindings ~loc bindings expr =
        [%expr let [%p name] = [%e binding] in [%e expr]]
   in
   with_let_bindings bindings
+
+let gen_symbol =
+  let counts = ref [] in
+  fun ?(prefix = "_x") () -> begin
+    match List.assoc_opt prefix !counts with
+    | Some count ->
+       let n = !count in
+       count := n + 1;
+       Printf.sprintf "%s__%03i_" prefix n
+    | None ->
+       let count = ref 1 in
+       counts := (prefix, count) :: !counts;
+       Printf.sprintf "%s__000_" prefix
+  end
