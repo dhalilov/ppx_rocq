@@ -24,13 +24,11 @@ let rocq_loc_of_loc loc =
   ]
 
 let with_let_bindings ~loc bindings expr =
-  let quoter = Quoter.create () in
   let rec with_let_bindings = function
     | [] -> expr
     | (name, binding) :: rest ->
        let expr = with_let_bindings rest in
        let name = Ast_builder.Default.ppat_var ~loc:name.loc name in
-       let binding = Quoter.quote quoter binding in
        [%expr let [%p name] = [%e binding] in [%e expr]]
   in
-  Quoter.sanitize quoter (with_let_bindings bindings)
+  with_let_bindings bindings
