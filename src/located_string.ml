@@ -28,18 +28,29 @@ let advance_char { pos; index } char =
 let advance substring pos =
   String.fold_left advance_char pos substring
 
+let previous { pos; index } =
+  if pos.pos_cnum > pos.pos_bol then
+    Some { pos = { pos with pos_cnum = pos.pos_cnum - 1 };
+           index = index - 1 }
+  else None
+
 (** {1 Located strings} *)
 
 type t = string loc
 
-let rec find ~from char string =
-  match String.get string.txt from.index with
-  | c when Char.equal c char ->
+let lookup pos string =
+  String.get string.txt pos.index
+
+let rec find_f ~from f string =
+  match lookup from string with
+  | c when f c ->
      Some from
   | c ->
-     find ~from:(advance_char from c) char string
+     find_f ~from:(advance_char from c) f string
   | exception Invalid_argument _ ->
      None
+
+let find ~from c string = find_f ~from (Char.equal c) string
 
 let substring ?from ?until string =
   let loc = string.loc in
