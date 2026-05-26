@@ -1,4 +1,4 @@
-(** Extension nodes for quoting Rocq code. *)
+(** Extension nodes for quoting Rocq terms. *)
 
 open Ppxlib
 open Expansion_helpers
@@ -64,44 +64,47 @@ end
 (** Extensions [[%expr]], [[%glob_constr]], and [[%constr]] support term
     antiquotations. *)
 
-let build_antiquotation_context bindings ~loc =
-  let binding_to_expr (expr, typ) =
-    match typ with
-    | Quasiquotation.Unspecified | Constr -> [%expr `Constr ([%e expr]: EConstr.constr)]
-    | Open_constr -> [%expr `Open_constr ([%e expr]: EConstr.econstr)]
-    | Preterm -> [%expr `Preterm ([%e expr]: Glob_term.glob_constr)]
-    | Expr -> [%expr `Expr ([%e expr]: Constrexpr.constr_expr)]
-  in
-  let bindings = List.map binding_to_expr bindings in
-  Ast_builder.Default.pexp_array ~loc bindings
+module Antiquotations = struct
+  let constr ~loc expr = [%expr `Constr ([%e expr] : Ppx_rocq_runtime.Terms.constr)]
+  let open_constr ~loc expr = [%expr `Open_constr ([%e expr] : Ppx_rocq_runtime.Terms.open_constr)]
+  let preterm ~loc expr = [%expr `Preterm ([%e expr] : Ppx_rocq_runtime.Terms.glob_constr)]
+  let expr ~loc expr = [%expr `Expr ([%e expr] : Ppx_rocq_runtime.Terms.constrexpr)]
+
+  let term = [
+      ("constr", constr);
+      ("open_constr", open_constr);
+      ("preterm", preterm);
+      ("expr", expr);
+    ]
+end
 
 let expand_antiquotation ?name ~tactic_mode parser quasiparser ~ctxt string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
-  let template, bindings =
-    Quasiquotation.parse ~loc:string_loc string |>
-    Quasiquotation.generate_template
+  let template = Template.parse ~loc:string_loc string in
+  let runtime_template, antiquotations =
+    Template.interpret
+      ~loc:string_loc
+      ~default:Antiquotations.constr
+      ~explicit:Antiquotations.term
+      template
   in
-  let template = Ast_builder.Default.estring ~loc:string_loc template in
   let rocq_loc = Ppx_utils.rocq_loc_of_loc string_loc in
-  let parser = if List.is_empty bindings then parser else quasiparser in
-  let parse_result = [%expr [%e parser] ~loc:[%e rocq_loc] [%e template]] in
+  let parser = if List.is_empty antiquotations then parser else quasiparser in
+  let parse_result = [%expr [%e parser] ~loc:[%e rocq_loc] [%e runtime_template]] in
   let parse_result =
     if tactic_mode then [%expr Ppx_rocq_runtime.Tactics.memoize [%e parse_result]]
     else parse_result
   in
   let parse_result = Hoister.hoist ~loc ?name parse_result in
-  match bindings with
+  match antiquotations with
   | [] -> parse_result
   | _ ->
      if tactic_mode then
        [%expr
-         let substitution = [%e build_antiquotation_context bindings ~loc] in
          let* partial_term = [%e parse_result] in
-         partial_term substitution]
+         partial_term [%e Ast_builder.Default.pexp_array ~loc antiquotations]]
      else
-       [%expr
-         let substitution = [%e build_antiquotation_context bindings ~loc] in
-         [%e parse_result] substitution]
+       [%expr [%e parse_result] [%e Ast_builder.Default.pexp_array ~loc antiquotations]]
 
 (** {2 [Constrexpr.constr_expr]} *)
 
