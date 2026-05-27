@@ -10,9 +10,10 @@ open Expansion_helpers
 
 let expand_string_interpolation ~ctxt interpolator string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
-  let string_expr = Ast_builder.Default.estring ~loc:string_loc string in
+  let template = Template.parse ~loc:string_loc string in
+  let string_expr = Template.interpolate ~loc:string_loc template in
   let rocq_loc = Ppx_utils.rocq_loc_of_loc string_loc in
-  [%expr [%e interpolator] ~loc:[%e rocq_loc] [%string [%e string_expr]]]
+  [%expr [%e interpolator] ~loc:[%e rocq_loc] [%e string_expr]]
 
 module Ident = struct
   let expand ~ctxt =

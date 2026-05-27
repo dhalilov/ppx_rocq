@@ -38,6 +38,27 @@ let interpret_fragment ~default ~explicit fragment =
      | Ok value -> Antiquoted_value value
      | Error warning -> Unknown_antiquotation { warning; antiquotation = Antiquotation.to_string antiquotation }
 
+let interpolate ~loc fragments =
+  let default ~loc e = [%expr ([%e e] : string)] in
+  let rec interpolate fragments =
+    match fragments with
+    | [] -> ~parts:[], ~warnings:[]
+    | fragment :: fragments' ->
+       let ~parts, ~warnings = interpolate fragments' in
+       match interpret_fragment ~default ~explicit:[] fragment with
+       | Constant lit ->
+          let expr = Ast_builder.Default.estring ~loc lit in
+          ~parts:(expr :: parts), ~warnings
+       | Antiquoted_value expr ->
+          ~parts:(expr :: parts), ~warnings
+       | Unknown_antiquotation { warning; antiquotation } ->
+          let expr = Ast_builder.Default.estring ~loc antiquotation in
+          ~parts:(expr :: parts), ~warnings:(warning :: warnings)
+  in
+  let ~parts, ~warnings = interpolate fragments in
+  let concatenated = [%expr String.concat "" [%e Ast_builder.Default.elist ~loc parts]] in
+  Ast_diagnostics.warn' warnings concatenated
+
 let interpret ~loc ~default ~explicit fragments =
   let rec interpret fragments next_id =
     match fragments with

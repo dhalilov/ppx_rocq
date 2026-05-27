@@ -2,10 +2,6 @@
  (name ppx_rocq)
  (public_name ppx_rocq)
  (kind ppx_rewriter)
- (libraries
-   ppxlib
-   str
-   ppx_string
-   ppx_string.runtime)
- (ppx_runtime_libraries ppx_rocq.runtime ppx_string.runtime)
+ (libraries ppxlib)
+ (ppx_runtime_libraries ppx_rocq.runtime)
  (preprocess (pps ppxlib.metaquot)))

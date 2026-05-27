@@ -18,6 +18,14 @@ val parse : loc:location -> string -> Antiquotation.t fragment list
     Currently, the implementation does not allow the [}] character to appear inside
     an antiquotation. *)
 
+val interpolate : loc:location -> Antiquotation.t fragment list -> expression
+(** [interpolate ~loc template] interprets the list of template fragments as string interpolation,
+    i.e., every antiquotation is a string.
+
+    For example, [interpolate ~loc [Literal "foo_"; Antiquotation { kind = Default; expression = "x" }]]
+    returns [[%expr String.concat "" ["foo_"; x]]].
+ *)
+
 val interpret :
   loc:location ->
   default:(loc:location -> expression -> expression) ->
