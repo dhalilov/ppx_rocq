@@ -151,8 +151,8 @@ module Constr = struct
   open Match_extensions
 
   type string_or_match_payload =
-  | String of string loc                   (** String payload, i.e. [[%constr "…"]]. *)
-  | Match of term_pattern match_expression (** Match expression, i.e. [match%constr c with …]. *)
+  | String of string loc           (** String payload, i.e. [[%constr "…"]]. *)
+  | Match of match_term_expression (** Match expression, i.e. [match%constr c with …]. *)
 
   let expand_string ~ctxt =
     let loc = Expansion_context.Extension.extension_point_loc ctxt in

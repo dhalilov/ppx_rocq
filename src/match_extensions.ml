@@ -9,16 +9,32 @@ type term_pattern =
   | Pattern of string loc (** e.g. ["?x + ?y"] *)
   | Wildcard of location  (** [_] *)
 
+(** Type of patterns for matching hypotheses. *)
+type hypothesis_pattern =
+  { name: label loc;
+    pattern: term_pattern }
+
+(** Type of patterns in a goal-matching case. *)
+type goal_pattern =
+  { hypotheses: hypothesis_pattern list;
+    conclusion: term_pattern }
+
 (** Type of pattern-matching cases. *)
 type 'pattern match_case =
   { pattern: 'pattern;  (** Pattern condition of the case. *)
     rhs: expression loc (** Expression to execute when the pattern matches. *)
   }
 
-(** Type of pattern-matching expressions. *)
-type 'pattern match_expression =
-  { scrutinee: expression;           (** Scrutinee of the [match] expression. *)
-    cases: 'pattern match_case list; (** List of cases of the [match]. *)
+(** Type of term-matching expressions. *)
+type match_term_expression =
+  { scrutinee: expression;               (** Scrutinee of the [match] expression. *)
+    cases: term_pattern match_case list; (** List of cases of the [match]. *)
+  }
+
+(** Type of goal-matching expressions. *)
+type match_goal_expression =
+  { reverse: bool;                       (** Whether the match should be reversed or not. *)
+    cases: goal_pattern match_case list; (** List of cases of the [match]. *)
   }
 
 (** {2 AST patterns} *)
@@ -26,7 +42,7 @@ type 'pattern match_expression =
 (** Term-matching patterns.
 
     Example: ["?x + ?y"], [_]. *)
-let term_pattern =
+let term_pattern (): (pattern, term_pattern -> 'a, 'a) Ast_pattern.t =
   let regular_pattern = Ast_pattern.(
       map ~f:(fun f s loc -> f (Pattern { txt = s; loc })) @@
         ppat_constant (pconst_string __ __ drop))
@@ -40,21 +56,62 @@ let term_pattern =
 (** Term pattern-matching cases.
 
     Example: ["?x + ?y" -> …]. *)
-let term_pattern_case =
-  let term_pattern_case = Ast_pattern.(
+let match_term_case =
+  let match_term_case = Ast_pattern.(
       case
-        ~lhs:term_pattern
+        ~lhs:(term_pattern ())
         ~guard:none
         ~rhs:__')
   in
-  Ast_pattern.(map ~f:(fun f pattern rhs -> f { pattern; rhs }) term_pattern_case)
+  Ast_pattern.(map ~f:(fun f pattern rhs -> f { pattern; rhs }) match_term_case)
 
 (** Term pattern-matching expressions.
 
     Example: [match%constr c with "?x + ?y" -> …]. *)
-let match_term: (expression, term_pattern match_expression -> expression, expression) Ast_pattern.t =
-  let match_term = Ast_pattern.(pexp_match __ (many term_pattern_case)) in
+let match_term: (expression, match_term_expression -> expression, expression) Ast_pattern.t =
+  let match_term = Ast_pattern.(pexp_match __ (many match_term_case)) in
   Ast_pattern.(map ~f:(fun f scrutinee cases -> f { scrutinee; cases }) match_term)
+
+(** Hypothesis pattern.
+
+    Example: [H = "?x + ?y"]. *)
+let hypothesis_pattern =
+  let name = Ast_pattern.(loc (lident __')) in
+  let pattern = term_pattern () in
+  let hypothesis_pattern = Ast_pattern.pair name pattern in
+  Ast_pattern.(map ~f:(fun f name pattern -> f { name; pattern }) hypothesis_pattern)
+
+(** Pattern for a list of hypotheses.
+
+    Example: [{ H1 = "?x + ?y"; H2 = "?z" }]. *)
+let hypotheses_pattern =
+  Ast_pattern.(ppat_record (many hypothesis_pattern) closed)
+
+(** Goal pattern.
+
+    Example: [{ H1 = "?x + ?y"; H2 = "?z" }, "?x = ?z"]. *)
+let goal_pattern =
+  let conclusion_pattern = term_pattern () in
+  let goal_pattern = Ast_pattern.(ppat_tuple (hypotheses_pattern ^:: conclusion_pattern ^:: nil)) in
+  Ast_pattern.(map ~f:(fun f hypotheses conclusion -> f { hypotheses; conclusion }) goal_pattern)
+
+let match_goal_case =
+  let match_goal_case = Ast_pattern.(
+      case
+        ~lhs:goal_pattern
+        ~guard:none
+        ~rhs:__')
+  in
+  Ast_pattern.(map ~f:(fun f pattern rhs -> f { pattern; rhs }) match_goal_case)
+
+let match_goal : (expression, match_goal_expression -> expression, expression) Ast_pattern.t =
+  let reverse = Ast_pattern.(
+      alt
+        (map ~f:(fun f -> f true) @@ pexp_ident (lident (string "reverse")))
+        (map ~f:(fun f -> f false) pexp_unreachable))
+  in
+  let match_goal = Ast_pattern.(pexp_match reverse (many match_goal_case)) in
+  Ast_pattern.(map ~f:(fun f reverse cases -> f { reverse; cases }) match_goal)
 
 (** {1 Expansions} *)
 
@@ -100,4 +157,10 @@ module Term = struct
     let cases = List.map (expand_case ~loc) cases in
     let cases = Ast_builder.Default.elist ~loc cases in
     [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+end
+
+(** {2 Goal matching} *)
+
+module Goal = struct
+
 end
