@@ -122,3 +122,6 @@ val open_constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array ->
 (** [let* f = open_constr_of_quasistring s in f context] behaves like
     [let* f = constr_of_string s in f context], except that antiquotations of
     the form [%{n}] are replaced by [context.(n)]. *)
+
+val substitute : (antiquotation array -> 'a Proofview.tactic) Proofview.tactic -> antiquotation array -> 'a Proofview.tactic
+(** [substitute term_with_holes values] is equivalent to [let* t = term_with_holes in t values]. *)

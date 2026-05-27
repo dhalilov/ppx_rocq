@@ -213,3 +213,6 @@ let open_constr_of_quasistring ?loc s =
 let constr_of_quasistring ?loc s =
   (* FIXME: We should trigger an open_constr -> constr translation. *)
   open_constr_of_quasistring ?loc s
+
+let substitute term_with_holes values =
+  let* t = term_with_holes in t values

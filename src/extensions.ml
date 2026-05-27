@@ -100,9 +100,9 @@ let expand_antiquotation ~name ~tactic_mode parser quasiparser ~ctxt string stri
   | [] -> parse_result
   | _ ->
      if tactic_mode then
-       [%expr
-         let* partial_term = [%e parse_result] in
-         partial_term [%e Ast_builder.Default.pexp_array ~loc antiquotations]]
+       [%expr Ppx_rocq_runtime.Parsing.substitute
+           [%e parse_result]
+           [%e Ast_builder.Default.pexp_array ~loc antiquotations]]
      else
        [%expr [%e parse_result] [%e Ast_builder.Default.pexp_array ~loc antiquotations]]
 
