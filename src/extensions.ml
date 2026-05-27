@@ -78,7 +78,7 @@ module Antiquotations = struct
     ]
 end
 
-let expand_antiquotation ?name ~tactic_mode parser quasiparser ~ctxt string string_loc =
+let expand_antiquotation ~name ~tactic_mode parser quasiparser ~ctxt string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
   let template = Template.parse ~loc:string_loc string in
   let runtime_template, antiquotations =
@@ -95,7 +95,7 @@ let expand_antiquotation ?name ~tactic_mode parser quasiparser ~ctxt string stri
     if tactic_mode then [%expr Ppx_rocq_runtime.Tactics.memoize [%e parse_result]]
     else parse_result
   in
-  let parse_result = Hoister.hoist ~loc ?name parse_result in
+  let parse_result = Hoister.hoist ~loc ~name parse_result in
   match antiquotations with
   | [] -> parse_result
   | _ ->
@@ -113,7 +113,7 @@ module Expr = struct
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.parse_constrexpr] in
     let quasiparser = [%expr Ppx_rocq_runtime.Parsing.quasiparse_constrexpr] in
-    expand_antiquotation ~tactic_mode:false parser quasiparser ~ctxt
+    expand_antiquotation ~name:"expr" ~tactic_mode:false parser quasiparser ~ctxt
 
   let extension =
     Extension.V3.declare
