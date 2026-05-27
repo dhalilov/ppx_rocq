@@ -10,12 +10,15 @@ type t =
   { name: Located_string.t;
     kind: kind }
 
+(* TODO: We perform a very limited logic:
+   - We don't check that the first letter is lowercase.
+   - We don't warn when the character is supported by Rocq, but not by OCaml. *)
+let is_ident_char = function
+  | 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '\'' -> true
+  | _ -> false
+
 let parse_name ~question_mark string =
   let ident_start = Located_string.advance "?" question_mark in
-  (* TODO: For now, we only support a very basic set of Latin letters.
-     We might want to extend it to the intersection of valid OCaml identifiers
-     with Rocq identifiers (and warn when only one of them supports the character). *)
-  let is_ident_char c = Char.Ascii.is_lower c || c == '_' || c == '\'' in
   let ident_end = Located_string.find_f ~from:ident_start (Fun.negate is_ident_char) string in
   let name = Located_string.substring ~from:ident_start ?until:ident_end string in
   match name.txt with
