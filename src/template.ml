@@ -12,7 +12,7 @@ let rec parse_from ~from string =
      let { txt = literal } = Located_string.substring ~from ~until:percent string in
      let rest =
        match closing_brace with
-       | Some closing_brace -> parse_from ~from:closing_brace string
+       | Some closing_brace -> parse_from ~from:(Located_string.advance "}" closing_brace) string
        | None -> []
      in
      let result = Antiquotation antiquotation :: rest in
