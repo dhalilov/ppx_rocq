@@ -52,6 +52,7 @@ module Glob_constr = struct
     return (Detyping.detype Detyping.Now ~flags env sigma c)
 
   let map = Glob_ops.map_glob_constr
+  let fold = Glob_ops.fold_glob_constr
 end
 
 module Constr = struct

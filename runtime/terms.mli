@@ -78,6 +78,9 @@ module Glob_constr : sig
 
   val map : (t -> t) -> t -> t
   (** [map f c] maps every immediate subterm of [c] through function [f]. *)
+
+  val fold : ('a -> t -> 'a) -> 'a -> t -> 'a
+  (** [fold f init c] folds every immediate subterm of [c] through function [f]. *)
 end
 
 module Constr : sig

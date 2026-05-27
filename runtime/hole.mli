@@ -26,5 +26,8 @@ val fill_glob_holes : (?loc:Loc.t -> hole -> Genintern.glob_sign -> glob_constr)
     where [loc] is the location of the hole and [glob_sign] is the captured
     globalization signature. *)
 
+val find_glob_holes : glob_constr -> (int * Genintern.glob_sign) list
+(** [find_glob_holes c] returns the list of globalized holes in [c]. *)
+
 val fill_constr_holes : (hole -> constr) -> constr -> constr Proofview.tactic
 (** [fill_constr_holes f c] replaces every hole [Hole n] in [c] by [f n]. *)

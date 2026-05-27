@@ -109,6 +109,13 @@ let find_glob_hole t =
   | Glob_term.GGenarg raw -> get_glob wit_hole raw
   | _ -> None
 
+let rec find_glob_holes t =
+  match find_glob_hole (DAst.get t) with
+  | Some (Hole n, glob_sign) -> [n, glob_sign]
+  | None ->
+     let f acc subterm = find_glob_holes subterm @ acc in
+     Terms.Glob_constr.fold f [] t
+
 let rec fill_glob_holes f t =
   match find_glob_hole (DAst.get t) with
   | Some (Hole n, glob_sign) -> f ?loc:t.loc (Hole n) glob_sign

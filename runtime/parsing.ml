@@ -198,15 +198,22 @@ let glob_constr_of_quasistring ?loc s =
 
 let open_constr_of_quasistring ?loc s =
   let partial_term = parse_with_holes ?loc s in
-  let* partial_constr = Terms.Open_constr.of_constrexpr partial_term in
+  let* partial_glob_constr = Terms.Glob_constr.of_constrexpr partial_term in
+  let glob_holes = Hole.find_glob_holes partial_glob_constr in
+  let* partial_constr = Terms.Open_constr.of_glob_constr partial_glob_constr in
   return (fun substitutions ->
-    let antiquotation_to_open_constr : antiquotation -> Terms.constr Proofview.tactic = function
-        | `Expr e -> Terms.Open_constr.of_constrexpr e
-        | `Preterm e -> Terms.Open_constr.of_glob_constr e
-        | `Constr c | `Open_constr c -> return c
+    let antiquotation_to_open_constr n : antiquotation -> Terms.constr Proofview.tactic = function
+      | `Expr e ->
+         (* Globalize [e] the same way that the hole was globalized. *)
+         (* TODO: Add type constraint depending on the evar's type. *)
+         let glob_sign = CList.assoc n glob_holes in
+         let glob_constr = Constrintern.intern_core WithoutTypeConstraint glob_sign e in
+         Terms.Open_constr.of_glob_constr glob_constr
+       | `Preterm e -> Terms.Open_constr.of_glob_constr e
+       | `Constr c | `Open_constr c -> return c
     in
     (* Evaluate substitutions eagerly, so that we can use [Hole.fill_constr_holes] *)
-    let* substitutions = Tactics.of_array (Array.map antiquotation_to_open_constr substitutions) in
+    let* substitutions = Tactics.of_array (Array.mapi antiquotation_to_open_constr substitutions) in
     Hole.fill_constr_holes (fun (Hole n) -> substitutions.(n)) partial_constr
   )
 
