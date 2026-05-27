@@ -2,64 +2,102 @@
 
 open Ppxlib
 
-type payload =
-  | String of string loc
-  | Match of
-      { scrutinee: expression;
-        cases: match_case list
-      }
-and match_case =
-  { lhs: string option loc; (** Pattern string, or [None] if the case is catch-all. *)
-    rhs: expression loc     (** Expression to execute when the pattern matches. *)
+(** {1 Definitions} *)
+
+(** Type of patterns in a term-matching case. *)
+type term_pattern =
+  | Pattern of string loc (** e.g. ["?x + ?y"] *)
+  | Wildcard of location  (** [_] *)
+
+(** Type of pattern-matching cases. *)
+type 'pattern match_case =
+  { pattern: 'pattern;  (** Pattern condition of the case. *)
+    rhs: expression loc (** Expression to execute when the pattern matches. *)
   }
 
-let expand_pattern_var Pattern_variable.{ name = { txt = id; loc } } =
-  let id_expr = Ast_builder.Default.estring ~loc id in
-  { txt = id; loc }, [%expr Names.Id.Map.find (Names.Id.of_string [%e id_expr]) subst]
+(** Type of pattern-matching expressions. *)
+type 'pattern match_expression =
+  { scrutinee: expression;           (** Scrutinee of the [match] expression. *)
+    cases: 'pattern match_case list; (** List of cases of the [match]. *)
+  }
 
-let expand_case ~loc { lhs = { txt = lhs; loc = lhs_loc }; rhs = { txt = rhs; loc = rhs_loc } } =
-  let rocq_loc = Ppx_utils.rocq_loc_of_loc lhs_loc in
-  let lhs, bindings =
-    match lhs with
-    | Some pattern ->
-       (** Approximate the set of metavariables used by [pattern] at
-           compilation-time by finding all occurrences of {v ?x v} or {v @?x v}.
-           Note that parsing is not available since PPX runs as a process separated from Rocq,
-           and therefore patterns such as {v ?x + ?y v} would fail to parse correctly. *)
-       let bindings = Pattern_variable.find_all ~loc:lhs_loc pattern in
-       let bindings = List.map expand_pattern_var bindings in
-       let pattern_expr = Ast_builder.Default.estring ~loc:lhs_loc pattern in
-       Hoister.hoist ~loc ~name:"pattern" [%expr Ppx_rocq_runtime.Tactics.memoize (Ppx_rocq_runtime.Parsing.match_pattern_of_string ~loc:[%e rocq_loc] [%e pattern_expr])], bindings
-    | None -> [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], []
-  in
-  let rhs =
-    match bindings with
-    | [] -> [%expr fun _ -> [%e rhs]]
-    | _ -> [%expr fun subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]]
-  in
-  [%expr ([%e lhs], [%e rhs])]
+(** {2 AST patterns} *)
 
-let expand_match ~ctxt ~scrutinee ~cases =
-  let loc = Expansion_context.Extension.extension_point_loc ctxt in
-  let cases = List.map (expand_case ~loc) cases in
-  let cases = Ast_builder.Default.elist ~loc cases in
-  [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+(** Term-matching patterns.
 
-let match_pattern: (expression, payload -> expression, expression) Ast_pattern.t =
+    Example: ["?x + ?y"], [_]. *)
+let term_pattern =
   let regular_pattern = Ast_pattern.(
-      map ~f:(fun f s loc -> f { txt = Some s; loc }) @@
+      map ~f:(fun f s loc -> f (Pattern { txt = s; loc })) @@
         ppat_constant (pconst_string __ __ drop))
   in
-  let any_pattern = Ast_pattern.(
-      map ~f:(fun f loc -> f { txt = None; loc }) @@
+  let wildcard_pattern = Ast_pattern.(
+      map ~f:(fun f loc -> f (Wildcard loc)) @@
         ppat_loc __ ppat_any)
   in
-  let case_pattern = Ast_pattern.(
+  Ast_pattern.alt regular_pattern wildcard_pattern
+
+(** Term pattern-matching cases.
+
+    Example: ["?x + ?y" -> …]. *)
+let term_pattern_case =
+  let term_pattern_case = Ast_pattern.(
       case
-        ~lhs:(alt regular_pattern any_pattern)
-        ~guard:(none)
-        ~rhs:(__'))
+        ~lhs:term_pattern
+        ~guard:none
+        ~rhs:__')
   in
-  let case_pattern = Ast_pattern.(map ~f:(fun f lhs rhs -> f { lhs; rhs }) case_pattern) in
-  let match_pattern = Ast_pattern.(pexp_match __ (many case_pattern)) in
-  Ast_pattern.(map ~f:(fun f scrutinee cases -> f (Match { scrutinee; cases })) match_pattern)
+  Ast_pattern.(map ~f:(fun f pattern rhs -> f { pattern; rhs }) term_pattern_case)
+
+(** Term pattern-matching expressions.
+
+    Example: [match%constr c with "?x + ?y" -> …]. *)
+let match_term: (expression, term_pattern match_expression -> expression, expression) Ast_pattern.t =
+  let match_term = Ast_pattern.(pexp_match __ (many term_pattern_case)) in
+  Ast_pattern.(map ~f:(fun f scrutinee cases -> f { scrutinee; cases }) match_term)
+
+(** {1 Expansions} *)
+
+(** {2 Term matching} *)
+
+module Term = struct
+  let expand_pattern ~loc pattern =
+    match pattern with
+    | Pattern { txt = pattern; loc = pattern_loc } ->
+       let pattern_variables = Pattern_variable.find_all ~loc:pattern_loc pattern in
+       let pattern_expr = Ast_builder.Default.estring ~loc:pattern_loc pattern in
+       let rocq_loc = Ppx_utils.rocq_loc_of_loc pattern_loc in
+       Hoister.hoist
+         ~loc
+         ~name:"pattern"
+         [%expr
+             Ppx_rocq_runtime.Tactics.memoize begin
+               Ppx_rocq_runtime.Parsing.match_pattern_of_string
+                 ~loc:[%e rocq_loc] [%e pattern_expr]
+             end], pattern_variables
+    | Wildcard loc -> [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], []
+
+  let expand_rhs ~loc ~pattern_variables rhs =
+    match pattern_variables with
+    | [] -> [%expr fun _ -> [%e rhs.txt]]
+    | _ ->
+       let to_binding Pattern_variable.{ name } =
+         let loc = name.loc in
+         let name_expr = Ast_builder.Default.estring ~loc name.txt in
+         name, [%expr Names.(Id.Map.find (Id.of_string [%e name_expr]) __subst)]
+       in
+       let bindings = List.map to_binding pattern_variables in
+       [%expr fun __subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs.txt]]
+
+  let expand_case ~loc { pattern; rhs } =
+    let pattern, pattern_variables = expand_pattern ~loc pattern in
+    let rhs = expand_rhs ~loc ~pattern_variables rhs in
+    [%expr ([%e pattern], [%e rhs])]
+
+  let expand_match ~ctxt { scrutinee; cases } =
+    let loc = Expansion_context.Extension.extension_point_loc ctxt in
+    (* TODO: Warn on any case after a wildcard, as they're unreachable. *)
+    let cases = List.map (expand_case ~loc) cases in
+    let cases = Ast_builder.Default.elist ~loc cases in
+    [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+end

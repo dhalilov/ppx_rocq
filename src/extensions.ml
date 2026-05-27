@@ -149,6 +149,10 @@ end
 module Constr = struct
   open Match_extensions
 
+  type string_or_match_payload =
+  | String of string loc                   (** String payload, i.e. [[%constr "…"]]. *)
+  | Match of term_pattern match_expression (** Match expression, i.e. [match%constr c with …]. *)
+
   let expand_string ~ctxt =
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
     let parser = [%expr Ppx_rocq_runtime.Parsing.constr_of_string] in
@@ -159,15 +163,19 @@ module Constr = struct
     let pattern = Ast_pattern.(pexp_constant (pconst_string __ __ drop)) in
     Ast_pattern.(map ~f:(fun f label loc -> f (String { txt = label; loc })) pattern)
 
+  let match_pattern =
+    let pattern = Match_extensions.match_term in
+    Ast_pattern.(map ~f:(fun f match_expr -> f (Match match_expr)) pattern)
+
   let extension =
     Extension.V3.declare
       "constr"
       Extension.Context.expression
-      Ast_pattern.(single_expr_payload (alt string_pattern Match_extensions.match_pattern))
+      Ast_pattern.(single_expr_payload (alt string_pattern match_pattern))
       (fun ~ctxt payload ->
         match payload with
         | String { txt = s; loc = s_loc } -> expand_string ~ctxt s s_loc
-        | Match { scrutinee; cases } -> expand_match ~ctxt ~scrutinee ~cases)
+        | Match match_expression -> Term.expand_match ~ctxt match_expression)
 
   let rule = Ppxlib.Context_free.Rule.extension extension
 end
