@@ -82,9 +82,9 @@ let interpret_expression ~default ~explicit { percent; kind; expression; closing
         let suggestion = Spellcheck.spellcheck (List.map fst explicit) kind in
         match suggestion with
         | Some hint ->
-           Error { txt = "Unknown kind \"" ^ kind ^ "\"\n" ^ hint; loc }
+           Error { txt = "Unknown antiquotation \"" ^ kind ^ "\"\n" ^ hint; loc }
         | None ->
-           Error { txt = "Unknown kind \"" ^ kind ^ "\""; loc }
+           Error { txt = "Unknown antiquotation \"" ^ kind ^ "\""; loc }
 
 let to_string { kind; expression } =
   "%"
