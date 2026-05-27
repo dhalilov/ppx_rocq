@@ -20,7 +20,7 @@ let parse_kind ~percent ~opening_brace string =
   | "" -> Some Default
   | k when String.ends_with ~suffix:":" k ->
      let name = String.sub k 0 (String.length k - 1) in
-     let is_valid_char c = Char.Ascii.is_letter c || c == '_' in
+     let is_valid_char c = Char.Ascii.is_alphanum c || c == '_' in
      if name <> "" && String.for_all is_valid_char name then
        let colon_pos = { opening_brace.pos with pos_cnum = opening_brace.pos.pos_cnum - 1 } in
        let loc = { loc_start = kind.loc.loc_start; loc_end = colon_pos; loc_ghost = false } in
