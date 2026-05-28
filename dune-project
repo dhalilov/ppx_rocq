@@ -11,5 +11,4 @@
  (synopsis "PPX syntax extensions for quoting Rocq terms in OCaml")
  (depends
    rocq-runtime
-   ppx_string
    ppxlib))

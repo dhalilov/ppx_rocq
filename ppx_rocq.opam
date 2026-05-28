@@ -6,7 +6,6 @@ authors: ["Dario Halilovic"]
 depends: [
   "dune" {>= "3.22"}
   "rocq-runtime"
-  "ppx_string"
   "ppxlib"
   "odoc" {with-doc}
 ]
