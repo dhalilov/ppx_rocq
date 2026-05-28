@@ -29,7 +29,7 @@ let advance substring pos =
   String.fold_left advance_char pos substring
 
 let previous { pos; index } =
-  if pos.pos_cnum > pos.pos_bol then
+  if pos.pos_cnum > pos.pos_bol && index > 0 then
     Some { pos = { pos with pos_cnum = pos.pos_cnum - 1 };
            index = index - 1 }
   else None
