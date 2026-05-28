@@ -6,13 +6,15 @@ open Ppxlib
 
 (** Type of patterns in a term-matching case. *)
 type term_pattern =
-  | Pattern of string loc (** e.g. ["?x + ?y"] *)
-  | Wildcard of location  (** [_] *)
+  | Pattern of string loc       (** e.g. ["?x + ?y"] *)
+  | Wildcard of location option (** [_] *)
 
 (** Type of patterns for matching hypotheses. *)
 type hypothesis_pattern =
-  { name: label loc;
-    pattern: term_pattern }
+  { name: label loc;              (** Name of the hypothesis. *)
+    binder_pattern: term_pattern; (** Pattern to apply to the binder. *)
+    type_pattern: term_pattern    (** Pattern to apply to the type. *)
+  }
 
 (** Type of patterns in a goal-matching case. *)
 type goal_pattern =
@@ -48,7 +50,7 @@ let term_pattern (): (pattern, term_pattern -> 'a, 'a) Ast_pattern.t =
         ppat_constant (pconst_string __ __ drop))
   in
   let wildcard_pattern = Ast_pattern.(
-      map ~f:(fun f loc -> f (Wildcard loc)) @@
+      map ~f:(fun f loc -> f (Wildcard (Some loc))) @@
         ppat_loc __ ppat_any)
   in
   Ast_pattern.alt regular_pattern wildcard_pattern
@@ -74,18 +76,29 @@ let match_term: (expression, match_term_expression -> expression, expression) As
 
 (** Hypothesis pattern.
 
-    Example: [H = "?x + ?y"]. *)
+    Example: [H = "?x + ?y"], [H = _ :: "nat"]. *)
 let hypothesis_pattern =
   let name = Ast_pattern.(loc (lident __')) in
-  let pattern = term_pattern () in
-  let hypothesis_pattern = Ast_pattern.pair name pattern in
-  Ast_pattern.(map ~f:(fun f name pattern -> f { name; pattern }) hypothesis_pattern)
+  let binder = term_pattern () in
+  let binder_with_type =
+    Ast_pattern.(ppat_construct (lident (string "::"))
+                   (some (pair nil (ppat_tuple (term_pattern () ^:: term_pattern () ^:: nil))))) in
+  let rhs =
+    Ast_pattern.(
+      alt
+        (map ~f:(fun f pattern -> f (~binder_pattern:pattern, ~type_pattern:(Wildcard None))) binder)
+        (map ~f:(fun f binder typ -> f (~binder_pattern:binder, ~type_pattern:typ)) binder_with_type)
+    )
+  in
+  let hypothesis_pattern = Ast_pattern.pair name rhs in
+  Ast_pattern.(map ~f:(fun f name (~binder_pattern, ~type_pattern) -> f { name; binder_pattern; type_pattern }) hypothesis_pattern)
 
 (** Pattern for a list of hypotheses.
 
-    Example: [{ H1 = "?x + ?y"; H2 = "?z" }]. *)
+    Example: [{ H1 = "?x + ?y"; H2 = "?z" }], [_]. *)
 let hypotheses_pattern =
-  Ast_pattern.(ppat_record (many hypothesis_pattern) closed)
+  let hypotheses_pattern = Ast_pattern.(ppat_record (many hypothesis_pattern) closed) in
+  Ast_pattern.(alt hypotheses_pattern (map ~f:(fun f -> f []) ppat_any))
 
 (** Goal pattern.
 
@@ -95,6 +108,9 @@ let goal_pattern =
   let goal_pattern = Ast_pattern.(ppat_tuple (hypotheses_pattern ^:: conclusion_pattern ^:: nil)) in
   Ast_pattern.(map ~f:(fun f hypotheses conclusion -> f { hypotheses; conclusion }) goal_pattern)
 
+(** Case of a [match%goal] construct.
+
+    Example: [{ H = "?x" :: "nat" }, "?x = ?x" -> …]. *)
 let match_goal_case =
   let match_goal_case = Ast_pattern.(
       case
@@ -104,11 +120,14 @@ let match_goal_case =
   in
   Ast_pattern.(map ~f:(fun f pattern rhs -> f { pattern; rhs }) match_goal_case)
 
+(** [match%goal] construct.
+
+    Example: [match%goal __ with { H = "?x" :: "nat" }, "?x = ?x" -> …]. *)
 let match_goal : (expression, match_goal_expression -> expression, expression) Ast_pattern.t =
   let reverse = Ast_pattern.(
       alt
         (map ~f:(fun f -> f true) @@ pexp_ident (lident (string "reverse")))
-        (map ~f:(fun f -> f false) pexp_unreachable))
+        (map ~f:(fun f -> f false) @@ pexp_ident (lident (string "__"))))
   in
   let match_goal = Ast_pattern.(pexp_match reverse (many match_goal_case)) in
   Ast_pattern.(map ~f:(fun f reverse cases -> f { reverse; cases }) match_goal)
@@ -132,7 +151,9 @@ module Term = struct
                Ppx_rocq_runtime.Parsing.match_pattern_of_string
                  ~loc:[%e rocq_loc] [%e pattern_expr]
              end], pattern_variables
-    | Wildcard loc -> [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], []
+    | Wildcard wildcard_loc ->
+       let loc = match wildcard_loc with Some loc -> loc | None -> loc in
+       [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], []
 
   let expand_rhs ~loc ~pattern_variables rhs =
     match pattern_variables with
@@ -162,5 +183,50 @@ end
 (** {2 Goal matching} *)
 
 module Goal = struct
+  let merge_pattern_variables l1 l2 =
+    let keep v = not (List.exists (Pattern_variable.equal v) l1) in
+    l1 @ List.filter keep l2
 
+  let expand_hypothesis ~loc { name; binder_pattern; type_pattern } =
+    let binder_pattern, binder_pattern_variables = Term.expand_pattern ~loc binder_pattern in
+    let type_pattern, type_pattern_variables = Term.expand_pattern ~loc type_pattern in
+    let expr = [%expr
+                let* binder = [%e binder_pattern] in
+                let* typ = [%e type_pattern] in
+                Proofview.tclUNIT (Names.Id.of_string_soft [%e Ast_builder.Default.estring ~loc:name.loc name.txt], binder, typ)] in
+    expr, merge_pattern_variables binder_pattern_variables type_pattern_variables
+
+  let expand_goal_pattern ~loc { hypotheses; conclusion } =
+    let hypotheses, pattern_variables = List.split (List.map (expand_hypothesis ~loc) hypotheses) in
+    let conclusion, conclusion_variables = Term.expand_pattern ~loc conclusion in
+    let pattern_variables = List.fold_left merge_pattern_variables [] pattern_variables in
+    let pattern_variables = merge_pattern_variables pattern_variables conclusion_variables in
+    [%expr
+       let* hypotheses = Ppx_rocq_runtime.Tactics.of_list [%e Ast_builder.Default.elist ~loc hypotheses] in
+       let* conclusion = [%e conclusion] in
+       Proofview.tclUNIT (Ppx_rocq_runtime.Pattern_matching.{ hypotheses; conclusion })
+    ], pattern_variables
+
+  let expand_case ~loc { pattern; rhs } =
+    let pattern, pattern_variables = expand_goal_pattern ~loc pattern in
+    let rhs = Term.expand_rhs ~loc ~pattern_variables rhs in
+    [%expr ([%e pattern], [%e rhs])]
+
+  let expand_match ~ctxt { reverse; cases } =
+    let loc = Expansion_context.Extension.extension_point_loc ctxt in
+    (* TODO: Warn on any case after a wildcard, as they're unreachable. *)
+    let cases = List.map (expand_case ~loc) cases in
+    let cases = Ast_builder.Default.elist ~loc cases in
+    let reverse = Ast_builder.Default.ebool ~loc reverse in
+    [%expr
+        Proofview.Goal.enter_one (fun __goal -> Ppx_rocq_runtime.Pattern_matching.match_goal ~reverse:[%e reverse] (Proofview.Goal.concl __goal) ~cases:[%e cases])]
+
+  let extension =
+    Extension.V3.declare
+      "goal"
+      Extension.Context.expression
+      Ast_pattern.(single_expr_payload match_goal)
+      expand_match
+
+  let rule = Context_free.Rule.extension extension
 end

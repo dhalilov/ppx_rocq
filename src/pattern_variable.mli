@@ -13,5 +13,8 @@ type t = private
     kind: kind              (** Kind of the pattern variable. *)
   }
 
+val equal : t -> t -> bool
+(** [equal v1 v2] returns [true] if [v1] and [v2] have the same name. *)
+
 val find_all : loc:location -> string -> t list
 (** [find_all ~loc string] finds all pattern variables in [string]. *)

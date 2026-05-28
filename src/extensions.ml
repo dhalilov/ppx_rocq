@@ -210,7 +210,9 @@ let () =
       Expr.rule;
       Preterm.rule;
       Constr.rule;
-      Open_constr.rule
+      Open_constr.rule;
+
+      Match_extensions.Goal.rule
     ]
     ~impl:(Hoister.expand_hoisting)
     "ppx_rocq"

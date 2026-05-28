@@ -18,3 +18,12 @@ val match_term : EConstr.constr -> cases:'a case list -> 'a Proofview.tactic
 (** [match_term t ~cases] performs pattern matching on term [t] with
     backtracking. *)
 
+type 'a goal_case = goal_pattern Proofview.tactic * 'a continuation
+
+and goal_pattern = {
+  hypotheses : (Names.variable * pattern * pattern) list;
+  conclusion : pattern;
+}
+
+val match_goal : ?reverse:bool -> Evd.econstr -> cases: 'a goal_case list -> 'a Proofview.tactic
+(** [match_goal ?reverse t ~cases] performs goal matching on [t] with backtracking. *)

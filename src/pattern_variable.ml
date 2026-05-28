@@ -10,6 +10,9 @@ type t =
   { name: Located_string.t;
     kind: kind }
 
+let equal v1 v2 =
+  String.equal v1.name.txt v2.name.txt
+
 (* TODO: We perform a very limited logic:
    - We don't check that the first letter is lowercase.
    - We don't warn when the character is supported by Rocq, but not by OCaml. *)
