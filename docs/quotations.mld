@@ -66,18 +66,11 @@ All term antiquotations are allowed in [[%constr "…"]] quotations.
 {@ocaml[
 [%constr "x"] (* x not found *)
 ]}
-Moreover, antiquotations are capture-avoiding, meaning that they cannot reference outer binders:
+To reference unbound variables, use [[%preterm]] instead:
 {@ocaml[
-let lhs = [%expr "x + y"] in
-let rhs = [%expr "y + x"] in
-[%constr "forall x y : nat, %expr:{lhs} = %expr:{rhs}"] (* x not found *)
-]}
-Variable capture can be implemented by delaying the interpretation of the term:
-{@ocaml[
-let lhs = [%expr "x + y"] in
-let rhs = [%expr "y + x"] in
-let t = [%expr "forall x y : nat, %expr:{lhs} = %expr:{rhs}"] in
-Terms.Constr.of_constrexpr t (* Works as expected *)
+let* lhs = [%preterm "x + y"] in
+let* rhs = [%preterm "y + x"] in
+[%constr "forall x y : nat, %preterm:{lhs} = %preterm:{rhs}"]
 ]}
 {%html:
   </p>
