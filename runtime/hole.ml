@@ -14,15 +14,8 @@ type glob_hole = hole * Genintern.glob_sign
 (* Inside constrs, we represent holes as specially-named evars. *)
 type constr_hole = EConstr.t
 
-let circled_numbers =
-  [| "⓪" ; "①" ; "②" ; "③" ; "④" ; "⑤" ; "⑥" ; "⑦" ; "⑧" ; "⑨" ;
-     "⑩" ; "⑪" ; "⑫" ; "⑬" ; "⑭" ; "⑮" ; "⑯" ; "⑰" ; "⑱" ; "⑲" ;
-     "⑳" |]
-
 (** Pretty-printing representation of holes. *)
-let hole_name (Hole n) =
-  if n < Array.length circled_numbers then circled_numbers.(n)
-  else "□[" ^ string_of_int n ^ "]"
+let hole_name (Hole n) = "__ppx_hole__" ^ string_of_int n
 
 (** {1 Generic argument} *)
 
@@ -122,14 +115,12 @@ let rec fill_glob_holes f t =
   | None -> Terms.Glob_constr.map (fill_glob_holes f) t
 
 let parse_hole_name str =
-  match Array.find_index (String.equal str) circled_numbers with
-  | Some i -> Some i
-  | None ->
-     let prefix = "□[" in
-     if String.starts_with ~prefix str then
-       let prefix_length = String.length prefix in
-       int_of_string_opt (String.sub str prefix_length (String.length str - prefix_length - 1))
-     else None
+  let prefix = "__ppx_hole__" in
+  if String.starts_with ~prefix str then
+    let n = String.sub str (String.length prefix) (String.length str - String.length prefix) in
+    int_of_string_opt n
+  else
+    None
 
 let find_constr_hole sigma t =
   match EConstr.kind sigma t with
