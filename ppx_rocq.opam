@@ -3,6 +3,8 @@ opam-version: "2.0"
 synopsis: "PPX syntax extensions for quoting Rocq terms in OCaml"
 maintainer: ["Dario Halilovic"]
 authors: ["Dario Halilovic"]
+homepage: "https://github.com/epfl-systemf/ppx_rocq"
+bug-reports: "https://github.com/epfl-systemf/ppx_rocq/issues"
 depends: [
   "dune" {>= "3.22"}
   "rocq-runtime"

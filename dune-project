@@ -5,6 +5,8 @@
 (name ppx_rocq)
 (authors "Dario Halilovic")
 (maintainers "Dario Halilovic")
+(homepage "https://github.com/epfl-systemf/ppx_rocq")
+(bug_reports "https://github.com/epfl-systemf/ppx_rocq/issues")
 
 (package
  (name ppx_rocq)
