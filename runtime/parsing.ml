@@ -51,18 +51,18 @@ let match_pattern_of_string ?loc s =
 (** {2 Generic arguments} *)
 
 type genarg_antiquotation =
-  [ `Constr of Terms.constr           (** {v %{…} v} or {v %constr:{…} v} *)
-  | `Open_constr of Terms.open_constr (** {v %open_constr:{…} v} *)
-  | `Preterm of Terms.glob_constr     (** {v %preterm:{…} v} *)
+  [ `Constr of Terms.constr           (** [%{…}] or [%constr:{…}] *)
+  | `Open_constr of Terms.open_constr (** [%open_constr:{…}] *)
+  | `Preterm of Terms.glob_constr     (** [%preterm:{…}] *)
   ]
 
 type antiquotation =
   [ genarg_antiquotation
-  | `Expr of Terms.constrexpr (** {v %expr:{…} v} *)
+  | `Expr of Terms.constrexpr (** [%expr:{…}] *)
   ]
 
-(** As a performance optimization, we interpret {v %preterm:{…} v} and
-    {v %constr:{…} v} as generic arguments, so that we don't have to
+(** As a performance optimization, we interpret [%preterm:{…}] and
+    [%constr:{…}] as generic arguments, so that we don't have to
     re-globalize/re-typecheck the given terms. *)
 
 let wit_antiquotation : (genarg_antiquotation, genarg_antiquotation) GenConstr.tag =
