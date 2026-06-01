@@ -27,9 +27,14 @@ type 'pattern match_case =
     rhs: expression loc (** Expression to execute when the pattern matches. *)
   }
 
+(** Type of scrutinees of the [match%constr] construct. *)
+type match_term_scrutinee =
+  | Literal of string loc    (** ["…"] *)
+  | Expression of expression (** Any expression of type [constr]. *)
+
 (** Type of term-matching expressions. *)
 type match_term_expression =
-  { scrutinee: expression;               (** Scrutinee of the [match] expression. *)
+  { scrutinee: match_term_scrutinee;     (** Scrutinee of the [match] expression. *)
     cases: term_pattern match_case list; (** List of cases of the [match]. *)
   }
 
@@ -71,8 +76,13 @@ let match_term_case =
 
     Example: [match%constr c with "?x + ?y" -> …]. *)
 let match_term: (expression, match_term_expression -> expression, expression) Ast_pattern.t =
-  let match_term = Ast_pattern.(pexp_match __ (many match_term_case)) in
-  Ast_pattern.(map ~f:(fun f scrutinee cases -> f { scrutinee; cases }) match_term)
+  let match_term = Ast_pattern.(pexp_match __' (many match_term_case)) in
+  Ast_pattern.(map ~f:(fun f { txt = scrutinee; loc } cases ->
+                   (* Check whether the scrutinee is a constant string. *)
+                   let x = Ast_pattern.parse_res (estring __') loc scrutinee (fun x -> x) in
+                   match x with
+                   | Ok string -> f { scrutinee = Literal string; cases }
+                   | Error _ -> f { scrutinee = Expression scrutinee; cases }) match_term)
 
 (** Hypothesis pattern.
 
@@ -177,7 +187,12 @@ module Term = struct
     (* TODO: Warn on any case after a wildcard, as they're unreachable. *)
     let cases = List.map (expand_case ~loc) cases in
     let cases = Ast_builder.Default.elist ~loc cases in
-    [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+    match scrutinee with
+    | Expression scrutinee ->
+       [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+    | Literal scrutinee ->
+       let scrutinee = Ast_builder.Default.estring ~loc:scrutinee.loc scrutinee.txt in
+       [%expr Ppx_rocq_runtime.Pattern_matching.match_term' [%constr [%e scrutinee]] ~cases:[%e cases]]
 end
 
 (** {2 Goal matching} *)

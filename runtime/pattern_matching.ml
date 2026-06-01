@@ -25,6 +25,9 @@ let match_term t ~cases =
   in
   test_cases matching_error cases
 
+let match_term' t ~cases =
+  let* t in match_term t ~cases
+
 type 'a goal_case = goal_pattern Proofview.tactic * 'a continuation
 and goal_pattern =
   { hypotheses: (Names.Id.t * pattern * pattern) list;
