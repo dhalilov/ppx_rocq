@@ -13,8 +13,8 @@ type t = private
     kind: kind              (** Kind of the pattern variable. *)
   }
 
-val equal : t -> t -> bool
-(** [equal v1 v2] returns [true] if [v1] and [v2] have the same name. *)
+module Set : (Set.S with type elt := t)
+(** Sets of pattern variables. *)
 
-val find_all : loc:location -> string -> t list
+val find_all : loc:location -> string -> Set.t
 (** [find_all ~loc string] finds all pattern variables in [string]. *)

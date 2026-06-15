@@ -163,18 +163,18 @@ module Term = struct
              end], pattern_variables
     | Wildcard wildcard_loc ->
        let loc = match wildcard_loc with Some loc -> loc | None -> loc in
-       [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], []
+       [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], Pattern_variable.Set.empty
 
   let expand_rhs ~loc ~pattern_variables rhs =
-    match pattern_variables with
-    | [] -> [%expr fun _ -> [%e rhs.txt]]
-    | _ ->
+    if Pattern_variable.Set.is_empty pattern_variables then
+      [%expr fun _ -> [%e rhs.txt]]
+    else
        let to_binding Pattern_variable.{ name } =
          let loc = name.loc in
          let name_expr = Ast_builder.Default.estring ~loc name.txt in
          name, [%expr Names.(Id.Map.find (Id.of_string [%e name_expr]) __subst)]
        in
-       let bindings = List.map to_binding pattern_variables in
+       let bindings = List.map to_binding (Pattern_variable.Set.to_list pattern_variables) in
        [%expr fun __subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs.txt]]
 
   let expand_case ~loc { pattern; rhs } =
@@ -199,8 +199,7 @@ end
 
 module Goal = struct
   let merge_pattern_variables l1 l2 =
-    let keep v = not (List.exists (Pattern_variable.equal v) l1) in
-    l1 @ List.filter keep l2
+    Pattern_variable.Set.union l1 l2
 
   let expand_hypothesis ~loc { name; binder_pattern; type_pattern } =
     let binder_pattern, binder_pattern_variables = Term.expand_pattern ~loc binder_pattern in
@@ -214,7 +213,7 @@ module Goal = struct
   let expand_goal_pattern ~loc { hypotheses; conclusion } =
     let hypotheses, pattern_variables = List.split (List.map (expand_hypothesis ~loc) hypotheses) in
     let conclusion, conclusion_variables = Term.expand_pattern ~loc conclusion in
-    let pattern_variables = List.fold_left merge_pattern_variables [] pattern_variables in
+    let pattern_variables = List.fold_left merge_pattern_variables Pattern_variable.Set.empty pattern_variables in
     let pattern_variables = merge_pattern_variables pattern_variables conclusion_variables in
     [%expr
        let* hypotheses = Ppx_rocq_runtime.Tactics.of_list [%e Ast_builder.Default.elist ~loc hypotheses] in

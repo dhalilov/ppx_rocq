@@ -10,8 +10,12 @@ type t =
   { name: Located_string.t;
     kind: kind }
 
-let equal v1 v2 =
-  String.equal v1.name.txt v2.name.txt
+module Ord = struct
+  type nonrec t = t
+  let compare x y = String.compare x.name.txt y.name.txt
+end
+
+module Set = Set.Make(Ord)
 
 (* TODO: We perform a very limited logic:
    - We don't check that the first letter is lowercase.
@@ -46,10 +50,10 @@ let find ~from string =
 
 let rec find_all_from ~from string =
   match find ~from string with
-  | None -> []
-  | Some (pattern, None) -> [pattern]
+  | None -> Set.empty
+  | Some (pattern, None) -> Set.singleton pattern
   | Some (pattern, Some pattern_end) ->
-     pattern :: find_all_from ~from:pattern_end string
+     Set.add pattern (find_all_from ~from:pattern_end string)
 
 let find_all ~loc string =
   let string = { txt = string; loc } in
