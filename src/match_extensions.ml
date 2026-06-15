@@ -86,7 +86,7 @@ let match_term: (expression, match_term_expression -> expression, expression) As
 
 (** Hypothesis pattern.
 
-    Example: [H = "?x + ?y"], [H = _ :: "nat"]. *)
+    Example: [h = "?x + ?y"], [h = _ :: "nat"]. *)
 let hypothesis_pattern =
   let name = Ast_pattern.(loc (lident __')) in
   let binder = term_pattern () in
@@ -105,14 +105,14 @@ let hypothesis_pattern =
 
 (** Pattern for a list of hypotheses.
 
-    Example: [{ H1 = "?x + ?y"; H2 = "?z" }], [_]. *)
+    Example: [{ h1 = "?x + ?y"; h2 = "?z" }], [_]. *)
 let hypotheses_pattern =
   let hypotheses_pattern = Ast_pattern.(ppat_record (many hypothesis_pattern) closed) in
   Ast_pattern.(alt hypotheses_pattern (map ~f:(fun f -> f []) ppat_any))
 
 (** Goal pattern.
 
-    Example: [{ H1 = "?x + ?y"; H2 = "?z" }, "?x = ?z"]. *)
+    Example: [{ h1 = "?x + ?y"; h2 = "?z" }, "?x = ?z"]. *)
 let goal_pattern =
   let conclusion_pattern = term_pattern () in
   let goal_pattern = Ast_pattern.(ppat_tuple (hypotheses_pattern ^:: conclusion_pattern ^:: nil)) in
@@ -120,7 +120,7 @@ let goal_pattern =
 
 (** Case of a [match%goal] construct.
 
-    Example: [{ H = "?x" :: "nat" }, "?x = ?x" -> …]. *)
+    Example: [{ h = "?x" :: "nat" }, "?x = ?x" -> …]. *)
 let match_goal_case =
   let match_goal_case = Ast_pattern.(
       case
