@@ -208,7 +208,7 @@ module Goal = struct
     let expr = [%expr
                 let* binder = [%e binder_pattern] in
                 let* typ = [%e type_pattern] in
-                Proofview.tclUNIT (Names.Id.of_string_soft [%e Ast_builder.Default.estring ~loc:name.loc name.txt], binder, typ)] in
+                Proofview.tclUNIT (binder, typ)] in
     expr, merge_pattern_variables binder_pattern_variables type_pattern_variables
 
   let expand_goal_pattern ~loc { hypotheses; conclusion } =
@@ -222,9 +222,17 @@ module Goal = struct
        Proofview.tclUNIT (Ppx_rocq_runtime.Pattern_matching.{ hypotheses; conclusion })
     ], pattern_variables
 
-  let expand_case ~loc { pattern; rhs } =
-    let pattern, pattern_variables = expand_goal_pattern ~loc pattern in
+  let expand_rhs ~loc ~pattern_variables ~hyps rhs =
     let rhs = Term.expand_rhs ~loc ~pattern_variables rhs in
+    (* Bind hypothese names. *)
+    let to_binding i hyp = hyp, [%expr __hyps.([%e Ast_builder.Default.eint ~loc i])] in
+    let bindings = List.mapi to_binding hyps in
+    [%expr fun __hyps -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]]
+
+  let expand_case ~loc { pattern; rhs } =
+    let hyps = List.map (fun { name } -> name) pattern.hypotheses in
+    let pattern, pattern_variables = expand_goal_pattern ~loc pattern in
+    let rhs = expand_rhs ~loc ~pattern_variables ~hyps rhs in
     [%expr ([%e pattern], [%e rhs])]
 
   let expand_match ~ctxt { reverse; cases } =

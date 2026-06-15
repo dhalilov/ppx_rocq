@@ -21,10 +21,10 @@ val match_term : EConstr.constr -> cases:'a case list -> 'a Proofview.tactic
 val match_term' : EConstr.constr Proofview.tactic -> cases:'a case list -> 'a Proofview.tactic
 (** [match_term' t ~cases] is a shorthand for [let* t in match_term t ~cases]. *)
 
-type 'a goal_case = goal_pattern Proofview.tactic * 'a continuation
+type 'a goal_case = goal_pattern Proofview.tactic * (Names.Id.t array -> 'a continuation)
 
 and goal_pattern = {
-  hypotheses : (Names.variable * pattern * pattern) list;
+  hypotheses : (pattern * pattern) list;
   conclusion : pattern;
 }
 

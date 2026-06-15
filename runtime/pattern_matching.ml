@@ -28,9 +28,9 @@ let match_term t ~cases =
 let match_term' t ~cases =
   let* t in match_term t ~cases
 
-type 'a goal_case = goal_pattern Proofview.tactic * 'a continuation
+type 'a goal_case = goal_pattern Proofview.tactic * (Names.Id.t array -> 'a continuation)
 and goal_pattern =
-  { hypotheses: (Names.Id.t * pattern * pattern) list;
+  { hypotheses: (pattern * pattern) list;
     conclusion: pattern }
 
 open Ltac2_plugin
@@ -38,7 +38,7 @@ open Ltac2_plugin
 let compile_case case =
   let* case in
   let open Tac2match in
-  let hypotheses = List.map (fun (name, binder, typ) -> Some (MatchPattern binder), MatchPattern typ) case.hypotheses in
+  let hypotheses = List.map (fun (binder, typ) -> Some (MatchPattern binder), MatchPattern typ) case.hypotheses in
   let conclusion = MatchPattern case.conclusion in
   Proofview.tclUNIT (hypotheses, conclusion)
 
@@ -52,7 +52,8 @@ let match_goal ?(reverse = false) t ~cases =
        let* rule in
        try
          let* (hypotheses, context, subst) = Ltac2_plugin.Tac2match.match_goal env sigma t ~rev:reverse rule in
-         let tac = k subst in
+         let hyp_names = Array.of_list @@ List.map (fun (name, _, _) -> name) hypotheses in
+         let tac = k hyp_names subst in
          Proofview.tclOR tac (fun e -> test_cases e rest)
        with Constr_matching.PatternMatchingFailure ->
          test_cases (e, info) rest
