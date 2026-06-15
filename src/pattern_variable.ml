@@ -48,14 +48,14 @@ let find ~from string =
      Some ({ name = { txt = name.txt; loc }; kind }, ident_end)
   | None -> None
 
-let rec find_all_from ~from string =
+let rec find_all_from ~from ~acc string =
   match find ~from string with
-  | None -> Set.empty
-  | Some (pattern, None) -> Set.singleton pattern
+  | None -> acc
+  | Some (pattern, None) -> Set.add pattern acc
   | Some (pattern, Some pattern_end) ->
-     Set.add pattern (find_all_from ~from:pattern_end string)
+     find_all_from ~from:pattern_end ~acc:(Set.add pattern acc) string
 
 let find_all ~loc string =
   let string = { txt = string; loc } in
   let start = Located_string.start_position loc in
-  find_all_from ~from:start string
+  find_all_from ~from:start ~acc:Set.empty string
