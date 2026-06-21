@@ -24,7 +24,7 @@ val match_term' : EConstr.constr Proofview.tactic -> cases:'a case list -> 'a Pr
 type 'a goal_case = goal_pattern Proofview.tactic * (Names.Id.t array -> 'a continuation)
 
 and goal_pattern = {
-  hypotheses : (pattern * pattern) list;
+  hypotheses : (pattern option * pattern) list;
   conclusion : pattern;
 }
 

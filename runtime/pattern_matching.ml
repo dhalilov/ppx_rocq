@@ -30,7 +30,7 @@ let match_term' t ~cases =
 
 type 'a goal_case = goal_pattern Proofview.tactic * (Names.Id.t array -> 'a continuation)
 and goal_pattern =
-  { hypotheses: (pattern * pattern) list;
+  { hypotheses: (pattern option * pattern) list;
     conclusion: pattern }
 
 open Ltac2_plugin
@@ -38,7 +38,14 @@ open Ltac2_plugin
 let compile_case case =
   let* case in
   let open Tac2match in
-  let hypotheses = List.map (fun (binder, typ) -> Some (MatchPattern binder), MatchPattern typ) case.hypotheses in
+  let hyp_to_ltac2 (binder, typ) =
+    let binder =
+      match binder with
+      | Some pattern -> Some (MatchPattern pattern)
+      | None -> None
+    in binder, MatchPattern typ
+  in
+  let hypotheses = List.map hyp_to_ltac2 case.hypotheses in
   let conclusion = MatchPattern case.conclusion in
   Proofview.tclUNIT (hypotheses, conclusion)
 

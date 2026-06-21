@@ -201,8 +201,20 @@ module Goal = struct
   let merge_pattern_variables l1 l2 =
     Pattern_variable.Set.union l1 l2
 
+  (* Binder patterns interpret wildcard _ as matching any hypothesis, whether
+     they have a body or not. Hence it is slightly different from "_", which matches
+     hypotheses with _any_ body. *)
+  let expand_binder_pattern ~loc binder_pattern =
+    match binder_pattern with
+    | Pattern _ ->
+       let pattern, pattern_variables = Term.expand_pattern ~loc binder_pattern in
+       [%expr let* value = [%e pattern] in Proofview.tclUNIT (Some value)], pattern_variables
+    | Wildcard wildcard_loc ->
+       let loc = match wildcard_loc with Some loc -> loc | None -> loc in
+       [%expr Proofview.tclUNIT None], Pattern_variable.Set.empty
+
   let expand_hypothesis ~loc { name; binder_pattern; type_pattern } =
-    let binder_pattern, binder_pattern_variables = Term.expand_pattern ~loc binder_pattern in
+    let binder_pattern, binder_pattern_variables = expand_binder_pattern ~loc binder_pattern in
     let type_pattern, type_pattern_variables = Term.expand_pattern ~loc type_pattern in
     let expr = [%expr
                 let* binder = [%e binder_pattern] in
