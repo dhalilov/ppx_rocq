@@ -11,9 +11,6 @@ type hole = private Hole of int (** [Hole n] represents [□ₙ] *)
 type glob_hole
 (** Type of holes in globalized untyped terms ({!Terms.glob_constr}). *)
 
-type constr_hole
-(** Type of holes in well-typed terms ({!Terms.constr}). *)
-
 val make : ?loc:Loc.t -> int -> constrexpr
 (** [make ?loc n] creates a term with a hole named [n]. *)
 
@@ -25,9 +22,3 @@ val fill_glob_holes : (?loc:Loc.t -> hole -> Genintern.glob_sign -> glob_constr)
 (** [fill_glob_holes f c] replaces every hole [Hole n] in [c] by [f ?loc n glob_sign],
     where [loc] is the location of the hole and [glob_sign] is the captured
     globalization signature. *)
-
-val find_glob_holes : glob_constr -> (int * Genintern.glob_sign) list
-(** [find_glob_holes c] returns the list of globalized holes in [c]. *)
-
-val fill_constr_holes : (hole -> constr) -> constr -> constr Proofview.tactic
-(** [fill_constr_holes f c] replaces every hole [Hole n] in [c] by [f n]. *)

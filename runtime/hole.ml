@@ -11,9 +11,6 @@ type hole = Hole of int
    later can be internalized correctly. *)
 type glob_hole = hole * Genintern.glob_sign
 
-(* Inside constrs, we represent holes as specially-named evars. *)
-type constr_hole = EConstr.t
-
 (** Pretty-printing representation of holes. *)
 let hole_name (Hole n) = "__ppx_hole__" ^ string_of_int n
 
@@ -33,31 +30,7 @@ let () =
 
 let () =
   let interp_hole ?loc ~poly glob_env sigma tycon (Hole n, _) =
-    let env = GlobEnv.renamed_env glob_env in
-    let hole_name = hole_name (Hole n) in
-    let sigma, typ, relevance =
-      match tycon with
-      | Some typ -> sigma, typ, None
-      | None ->
-         let sigma, (typ, sort) =
-           Evarutil.new_type_evar
-             ~src:(loc, Evar_kinds.InternalHole)
-             ~naming:(Namegen.IntroIdentifier (Id.of_string_soft (hole_name ^ "type")))
-             env
-             sigma
-             Evd.univ_flexible in
-         let relevance = EConstr.ESorts.relevance_of_sort sort in
-         sigma, typ, Some relevance
-    in
-    let sigma, evar = Evarutil.new_evar
-                        ~src:(loc, Evar_kinds.InternalHole)
-                        ~naming:(Namegen.IntroIdentifier (Id.of_string_soft hole_name))
-                        ?relevance
-                        env
-                        sigma
-                        typ
-    in
-    Environ.make_judge evar typ, sigma
+    failwith "Cannot interpret hole"
   in
   GlobEnv.register_constr_interp0 wit_hole interp_hole
 
@@ -102,42 +75,7 @@ let find_glob_hole t =
   | Glob_term.GGenarg raw -> get_glob wit_hole raw
   | _ -> None
 
-let rec find_glob_holes t =
-  match find_glob_hole (DAst.get t) with
-  | Some (Hole n, glob_sign) -> [n, glob_sign]
-  | None ->
-     let f acc subterm = find_glob_holes subterm @ acc in
-     Terms.Glob_constr.fold f [] t
-
 let rec fill_glob_holes f t =
   match find_glob_hole (DAst.get t) with
   | Some (Hole n, glob_sign) -> f ?loc:t.loc (Hole n) glob_sign
   | None -> Terms.Glob_constr.map (fill_glob_holes f) t
-
-let parse_hole_name str =
-  let prefix = "__ppx_hole__" in
-  if String.starts_with ~prefix str then
-    let n = String.sub str (String.length prefix) (String.length str - String.length prefix) in
-    int_of_string_opt n
-  else
-    None
-
-let find_constr_hole sigma t =
-  match EConstr.kind sigma t with
-  | Evar (e, _) ->
-      begin match Evd.evar_ident e sigma with
-      | Some fullpath ->
-         let name = Libnames.basename fullpath in
-         parse_hole_name (Id.to_string name)
-      | None -> None
-      end
-  | _ -> None
-
-let fill_constr_holes f t =
-  let rec fill_constr_holes sigma f t =
-    match find_constr_hole sigma t with
-    | Some n -> f (Hole n)
-    | None -> EConstr.map sigma (fill_constr_holes sigma f) t
-  in
-  let* sigma = evar_map in
-  Proofview.Monad.return (fill_constr_holes sigma f t)
