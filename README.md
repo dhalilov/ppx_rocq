@@ -18,12 +18,11 @@ let nat_plus_assoc = [%constr "forall x y z : nat, %expr:{lhs} = %expr:{rhs}"] ;
 
 ## Setup
 
-To use `ppx_rocq`, run `dune install` on this repository:
+Install `ppx_rocq` through `opam` using the following commands:
 ```bash
-git clone https://github.com/epfl-systemf/ppx_rocq.git
-cd ppx_rocq
-dune build
-dune install
+opam update
+opam repo add rocq-released https://rocq-prover.github.io/opam/released/
+opam pin add https://github.com/epfl-systemf/ppx_rocq.git
 ```
 
 Then add `ppx_rocq` to the `preprocessing` field of your `library` or `executable` stanza:
