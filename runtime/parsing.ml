@@ -203,8 +203,10 @@ let open_constr_of_quasistring ?loc s =
       Terms.Open_constr.of_glob_constr glob_constr)
 
 let constr_of_quasistring ?loc s =
-  (* FIXME: We should trigger an open_constr -> constr translation. *)
-  open_constr_of_quasistring ?loc s
+  let* partial_glob_constr = glob_constr_of_quasistring ?loc s in
+  return (fun substitutions ->
+      let glob_constr = partial_glob_constr substitutions in
+      Terms.Constr.of_glob_constr glob_constr)
 
 let substitute term_with_holes values =
   let* t = term_with_holes in t values
