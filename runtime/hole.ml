@@ -42,7 +42,7 @@ let () =
          let sigma, (typ, sort) =
            Evarutil.new_type_evar
              ~src:(loc, Evar_kinds.InternalHole)
-             ~naming:(Namegen.IntroIdentifier (Id.of_string_soft ("type of " ^ hole_name)))
+             ~naming:(Namegen.IntroIdentifier (Id.of_string_soft (hole_name ^ "type")))
              env
              sigma
              Evd.univ_flexible in
