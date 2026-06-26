@@ -6,21 +6,35 @@ open Ltac2_plugin
 
 (** {1 General matching algorithms} *)
 
-let no_match_error = (CErrors.UserError Pp.(str "No matching clauses for match."), Exninfo.null)
+let match_failure = (CErrors.UserError Pp.(str "No matching clauses for match."), Exninfo.null)
+let match_failed () =
+  let (e, info) = match_failure in
+  Proofview.tclZERO ~info e
 
-(** {2 Backtracking match} *)
+(** {2 Backtracking matches} *)
 
-let rec one_match ~error = function
+let multi_match cases =
+  let rec multi_match error = function
   | [] ->
      let (e, info) = error in
      Proofview.tclZERO ~info e
-  | tac :: rest ->
-     try
-       Proofview.tclOR tac (fun error -> one_match ~error rest)
-     with Constr_matching.PatternMatchingFailure ->
-       one_match ~error rest
+  | case :: rest ->
+     Proofview.tclOR case (fun error -> multi_match error rest)
+  in multi_match match_failure cases
 
-let one_match cases = one_match ~error:no_match_error cases
+let one_match cases = Proofview.tclONCE (multi_match cases)
+
+(** {2 Non-backtracking match} *)
+
+let lazy_match cases =
+  let rec lazy_match = function
+    | [] -> match_failed ()
+    | case :: rest ->
+       let thunk = Proofview.tclUNIT (fun () -> case) in
+       Proofview.tclOR thunk (fun _ -> lazy_match rest)
+  in
+  let* thunk = Proofview.tclONCE (lazy_match cases) in
+  thunk ()
 
 (** {1 Matching over terms} *)
 
@@ -29,18 +43,40 @@ and pattern = Pattern.constr_pattern
 and 'a continuation = substitution -> 'a Proofview.tactic
 and substitution = Ltac_pretype.patvar_map
 
+let match_term_case env sigma t (pattern, k) =
+  let* pattern in
+  try
+    let subst = Constr_matching.matches env sigma pattern t in
+    k subst
+  with Constr_matching.PatternMatchingFailure ->
+    match_failed ()
+
 let match_term t ~cases =
   let* env = Tactics.env in
   let* sigma = Tactics.evar_map in
-  let case_tactic (pattern, k) =
-    let* pattern in
-    let subst = Constr_matching.matches env sigma pattern t in
-    k subst
-  in
-  one_match (List.map case_tactic cases)
+  let cases = List.map (fun case -> match_term_case env sigma t case) cases in
+  one_match cases
 
 let match_term' t ~cases =
   let* t in match_term t ~cases
+
+let lazy_match_term t ~cases =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let cases = List.map (fun case -> match_term_case env sigma t case) cases in
+  lazy_match cases
+
+let lazy_match_term' t ~cases =
+  let* t in lazy_match_term t ~cases
+
+let multi_match_term t ~cases =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let cases = List.map (fun case -> match_term_case env sigma t case) cases in
+  multi_match cases
+
+let multi_match_term' t ~cases =
+  let* t in multi_match_term t ~cases
 
 (** {1 Matching over goals} *)
 
@@ -61,13 +97,29 @@ let compile_case case =
   let conclusion = MatchPattern case.conclusion in
   Proofview.tclUNIT (hypotheses, conclusion)
 
-let match_goal ?(reverse = false) goal ~cases =
-  let* env = Tactics.env in
-  let* sigma = Tactics.evar_map in
-  let case_tactic (case, k) =
-    let* rule = compile_case case in
+let match_goal_case ~reverse env sigma goal (case, k) =
+  let* rule = compile_case case in
+  try
     let* (hypotheses, context, subst) = Tac2match.match_goal env sigma goal ~rev:reverse rule in
     let hyp_names = Array.of_list @@ List.map (fun (name, _, _) -> name) hypotheses in
     k hyp_names subst
-  in
-  one_match (List.map case_tactic cases)
+  with Constr_matching.PatternMatchingFailure ->
+    match_failed ()
+
+let match_goal ?(reverse = false) goal ~cases =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let cases = List.map (fun case -> match_goal_case ~reverse env sigma goal case) cases in
+  one_match cases
+
+let lazy_match_goal ?(reverse = false) goal ~cases =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let cases = List.map (fun case -> match_goal_case ~reverse env sigma goal case) cases in
+  lazy_match cases
+
+let multi_match_goal ?(reverse = false) goal ~cases =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let cases = List.map (fun case -> match_goal_case ~reverse env sigma goal case) cases in
+  multi_match cases
