@@ -117,6 +117,6 @@ module Pattern : sig
   val of_constrexpr : constrexpr -> t Proofview.tactic
   (** [of_constrexpr e] interprets expression [e] as a pattern. *)
 
-  val wildcard : t
+  val wildcard : t Proofview.tactic
   (** [wildcard] is the wildcard pattern ([_]). *)
 end

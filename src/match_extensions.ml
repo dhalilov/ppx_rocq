@@ -6,6 +6,9 @@ open Ppxlib
 
 (** Type of patterns in a term-matching case. *)
 type term_pattern =
+  | Term of pattern_expr                        (** Matches the whole term. *)
+  | Context of pattern_expr * string loc option (** e.g. [Context "?x + ?y" as c] *)
+and pattern_expr =
   | Pattern of string loc       (** e.g. ["?x + ?y"] *)
   | Wildcard of location option (** [_] *)
 
@@ -27,7 +30,7 @@ type 'pattern match_case =
     rhs: expression loc (** Expression to execute when the pattern matches. *)
   }
 
-(** Type of scrutinees of the [match%constr] construct. *)
+(** Type of scrutinees of the term pattern-matching constructs. *)
 type match_term_scrutinee =
   | Literal of string loc    (** ["…"] *)
   | Expression of expression (** Any expression of type [constr]. *)
@@ -44,12 +47,18 @@ type match_goal_expression =
     cases: goal_pattern match_case list; (** List of cases of the [match]. *)
   }
 
+(** Type of pattern-matching variants. *)
+type match_key =
+  | Default (** Default backtracking pattern-matching. *)
+  | Lazy    (** Non-backtracking. *)
+  | Multi   (** Backtracking even after the match. *)
+
 (** {2 AST patterns} *)
 
 (** Term-matching patterns.
 
     Example: ["?x + ?y"], [_]. *)
-let term_pattern (): (pattern, term_pattern -> 'a, 'a) Ast_pattern.t =
+let pattern_expr (): (pattern, pattern_expr -> 'a, 'a) Ast_pattern.t =
   let regular_pattern = Ast_pattern.(
       map ~f:(fun f s loc -> f (Pattern { txt = s; loc })) @@
         ppat_constant (pconst_string __ __ drop))
@@ -59,6 +68,25 @@ let term_pattern (): (pattern, term_pattern -> 'a, 'a) Ast_pattern.t =
         ppat_loc __ ppat_any)
   in
   Ast_pattern.alt regular_pattern wildcard_pattern
+
+(** Term- or subterm-matching patterns.
+
+    Example: ["?x + ?y"], [Context "?x + ?y" as c]. *)
+let term_pattern (): (pattern, term_pattern -> 'a, 'a) Ast_pattern.t =
+  let context_pattern () = Ast_pattern.(
+      ppat_construct
+        (lident (string "Context"))
+        (some (pair nil (pattern_expr ()))))
+  in
+  let context_pattern = Ast_pattern.(
+     alt
+       (map ~f:(fun f pat label -> f (pat, Some label)) (ppat_alias (context_pattern ()) __'))
+       (map ~f:(fun f pat -> f (pat, None)) (context_pattern ())))
+  in
+  Ast_pattern.(
+    alt
+      (map ~f:(fun f (pat, label) -> f (Context (pat, label))) context_pattern)
+      (map ~f:(fun f pat -> f (Term pat)) (pattern_expr ())))
 
 (** Term pattern-matching cases.
 
@@ -102,7 +130,7 @@ let hypothesis_pattern =
   let rhs =
     Ast_pattern.(
       alt
-        (map ~f:(fun f pattern -> f (~binder_pattern:pattern, ~type_pattern:(Wildcard None))) binder)
+        (map ~f:(fun f pattern -> f (~binder_pattern:pattern, ~type_pattern:(Term (Wildcard None)))) binder)
         (map ~f:(fun f binder typ -> f (~binder_pattern:binder, ~type_pattern:typ)) binder_with_type)
     )
   in
@@ -136,137 +164,237 @@ let match_goal_case =
   in
   Ast_pattern.(map ~f:(fun f pattern rhs -> f { pattern; rhs }) match_goal_case)
 
-(** [match%goal] construct.
+(** Goal pattern-matching construct.
 
-    Example: [match%goal __ with { H = "?x" :: "nat" }, "?x = ?x" -> …]. *)
+    Example: [match%rocq goal with { H = "?x" :: "nat" }, "?x = ?x" -> …]. *)
 let match_goal : (expression, match_goal_expression -> expression, expression) Ast_pattern.t =
+  let keyword name = Ast_pattern.(pexp_ident (lident (string name))) in
   let reverse = Ast_pattern.(
       alt
-        (map ~f:(fun f -> f true) @@ pexp_ident (lident (string "reverse")))
-        (map ~f:(fun f -> f false) @@ pexp_ident (lident (string "__"))))
+        (map ~f:(fun f -> f true) @@
+           pexp_apply
+             (keyword "reverse")
+             ((pair nolabel (keyword "goal")) ^:: nil))
+        (map ~f:(fun f -> f false) (keyword "goal")))
   in
   let match_goal = Ast_pattern.(pexp_match reverse (many match_goal_case)) in
   Ast_pattern.(map ~f:(fun f reverse cases -> f { reverse; cases }) match_goal)
+
+type match_expression =
+  | MatchTerm of match_term_expression
+  | MatchGoal of match_goal_expression
+
+(** A term-matching or goal-matching expression. *)
+let match_expression =
+  Ast_pattern.(
+    alt
+      (map ~f:(fun f expr -> f (MatchTerm expr)) match_term)
+      (map ~f:(fun f expr -> f (MatchGoal expr)) match_goal))
 
 (** {1 Expansions} *)
 
 (** {2 Term matching} *)
 
+let pattern_expr pattern =
+  match pattern with
+  | Term pattern -> pattern
+  | Context (pattern, _) -> pattern
+
+let context_var pattern =
+  match pattern with
+  | Term pattern -> None
+  | Context (_, var) -> var
+
+let pattern_variables pattern =
+  match pattern_expr pattern with
+  | Pattern string -> Pattern_variable.find_all ~loc:string.loc string.txt
+
+  | Wildcard _ -> Pattern_variable.Set.empty
+
 module Term = struct
   let expand_pattern ~loc pattern =
     match pattern with
     | Pattern { txt = pattern; loc = pattern_loc } ->
-       let pattern_variables = Pattern_variable.find_all ~loc:pattern_loc pattern in
        let pattern_expr = Ast_builder.Default.estring ~loc:pattern_loc pattern in
        let rocq_loc = Ppx_utils.rocq_loc_of_loc pattern_loc in
-       Hoister.hoist
-         ~loc
-         ~name:"pattern"
+       Hoister.hoist ~loc ~name:"pattern"
          [%expr
-             Ppx_rocq_runtime.Tactics.memoize begin
-               Ppx_rocq_runtime.Parsing.match_pattern_of_string
-                 ~loc:[%e rocq_loc] [%e pattern_expr]
-             end], pattern_variables
+           Ppx_rocq_runtime.Tactics.memoize begin
+             Ppx_rocq_runtime.Parsing.match_pattern_of_string
+               ~loc:[%e rocq_loc] [%e pattern_expr]
+           end]
     | Wildcard wildcard_loc ->
        let loc = match wildcard_loc with Some loc -> loc | None -> loc in
-       [%expr Proofview.tclUNIT Ppx_rocq_runtime.Terms.Pattern.wildcard], Pattern_variable.Set.empty
+       [%expr Ppx_rocq_runtime.Terms.Pattern.wildcard]
 
-  let expand_rhs ~loc ~pattern_variables rhs =
-    if Pattern_variable.Set.is_empty pattern_variables then
-      [%expr fun _ -> [%e rhs.txt]]
-    else
+  let expand_term_pattern ~loc pattern =
+    match pattern with
+    | Term pattern ->
+       let expr = expand_pattern ~loc pattern in
+       [%expr let* pattern = [%e expr] in Proofview.tclUNIT (Ltac2_plugin.Tac2match.MatchPattern pattern)]
+    | Context (pattern, _) ->
+       let expr = expand_pattern ~loc pattern in
+       [%expr let* pattern = [%e expr] in Proofview.tclUNIT (Ltac2_plugin.Tac2match.MatchContext pattern)]
+
+  let expand_rhs ~loc ~context_var ~pattern_variables rhs =
+    let context =
+      match context_var with
+      | Some label -> Ast_builder.Default.ppat_var ~loc:label.loc label
+      | None -> Ast_builder.Default.ppat_any ~loc
+    in
+    match Pattern_variable.Set.to_list pattern_variables with
+    | [] ->
+       [%expr fun [%p context] _ -> [%e rhs.txt]]
+    | pattern_variables ->
        let to_binding Pattern_variable.{ name } =
          let loc = name.loc in
          let name_expr = Ast_builder.Default.estring ~loc name.txt in
          name, [%expr Names.(Id.Map.find (Id.of_string [%e name_expr]) __subst)]
        in
-       let bindings = List.map to_binding (Pattern_variable.Set.to_list pattern_variables) in
-       [%expr fun __subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs.txt]]
+       let bindings = List.map to_binding pattern_variables in
+       [%expr fun [%p context] __subst -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs.txt]]
 
   let expand_case ~loc { pattern; rhs } =
-    let pattern, pattern_variables = expand_pattern ~loc pattern in
-    let rhs = expand_rhs ~loc ~pattern_variables rhs in
-    [%expr ([%e pattern], [%e rhs])]
+    let lhs = expand_term_pattern ~loc pattern in
+    let pattern_variables = pattern_variables pattern in
+    let context_var = context_var pattern in
+    let rhs = expand_rhs ~loc ~context_var ~pattern_variables rhs in
+    [%expr ([%e lhs], [%e rhs])]
 
-  let expand_match ~ctxt { scrutinee; cases } =
+  let expand_match_key ~loc key =
+    match key with
+    | Default -> [%expr Ppx_rocq_runtime.Pattern_matching.match_term]
+    | Lazy -> [%expr Ppx_rocq_runtime.Pattern_matching.lazy_match_term]
+    | Multi -> [%expr Ppx_rocq_runtime.Pattern_matching.multi_match_term]
+
+  let expand_match ~ctxt key { scrutinee; cases } =
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
-    (* TODO: Warn on any case after a wildcard, as they're unreachable. *)
-    let cases = List.map (expand_case ~loc) cases in
-    let cases = Ast_builder.Default.elist ~loc cases in
+    (* TODO: Warn on any case after a wildcard in [lazy_match], as they're unreachable. *)
+    let match_key = expand_match_key ~loc key in
+    let cases =
+      cases
+      |> List.map (expand_case ~loc)
+      |> Ast_builder.Default.elist ~loc
+    in
     match scrutinee with
     | Expression scrutinee ->
-       [%expr Ppx_rocq_runtime.Pattern_matching.match_term [%e scrutinee] ~cases:[%e cases]]
+       [%expr [%e match_key] [%e scrutinee] [%e cases]]
     | Literal scrutinee ->
        let scrutinee = Ast_builder.Default.estring ~loc:scrutinee.loc scrutinee.txt in
-       [%expr Ppx_rocq_runtime.Pattern_matching.match_term' [%constr [%e scrutinee]] ~cases:[%e cases]]
+       [%expr let* __scrutinee = [%constr [%e scrutinee]] in [%e match_key] __scrutinee [%e cases]]
 end
 
 (** {2 Goal matching} *)
 
+let goal_pattern_variables goal_pattern =
+  let union = Pattern_variable.Set.union in
+  let vars =
+    goal_pattern.hypotheses
+    |> List.map (fun hyp -> union
+                              (pattern_variables hyp.binder_pattern)
+                              (pattern_variables hyp.type_pattern))
+    |> List.fold_left union Pattern_variable.Set.empty
+  in
+  union vars (pattern_variables goal_pattern.conclusion)
+
+let context_var_pattern ~loc pattern =
+  match context_var pattern with
+  | Some name -> Ast_builder.Default.ppat_var ~loc:name.loc name
+  | None -> Ast_builder.Default.ppat_any ~loc
+
 module Goal = struct
-  let merge_pattern_variables l1 l2 =
-    Pattern_variable.Set.union l1 l2
 
   (* Binder patterns interpret wildcard _ as matching any hypothesis, whether
      they have a body or not. Hence it is slightly different from "_", which matches
      hypotheses with _any_ body. *)
   let expand_binder_pattern ~loc binder_pattern =
     match binder_pattern with
-    | Pattern _ ->
-       let pattern, pattern_variables = Term.expand_pattern ~loc binder_pattern in
-       [%expr let* value = [%e pattern] in Proofview.tclUNIT (Some value)], pattern_variables
-    | Wildcard wildcard_loc ->
+    | Term (Wildcard wildcard_loc) ->
        let loc = match wildcard_loc with Some loc -> loc | None -> loc in
-       [%expr Proofview.tclUNIT None], Pattern_variable.Set.empty
+       [%expr Proofview.tclUNIT None]
+    | _ ->
+       let pattern = Term.expand_term_pattern ~loc binder_pattern in
+       [%expr let* value = [%e pattern] in Proofview.tclUNIT (Some value)]
 
   let expand_hypothesis ~loc { name; binder_pattern; type_pattern } =
-    let binder_pattern, binder_pattern_variables = expand_binder_pattern ~loc binder_pattern in
-    let type_pattern, type_pattern_variables = Term.expand_pattern ~loc type_pattern in
-    let expr = [%expr
-                let* binder = [%e binder_pattern] in
-                let* typ = [%e type_pattern] in
-                Proofview.tclUNIT (binder, typ)] in
-    expr, merge_pattern_variables binder_pattern_variables type_pattern_variables
+    let binder_pattern = expand_binder_pattern ~loc binder_pattern in
+    let type_pattern = Term.expand_term_pattern ~loc type_pattern in
+    [%expr
+      let* binder = [%e binder_pattern] in
+      let* typ = [%e type_pattern] in
+      Proofview.tclUNIT (binder, typ)]
 
   let expand_goal_pattern ~loc { hypotheses; conclusion } =
-    let hypotheses, pattern_variables = List.split (List.map (expand_hypothesis ~loc) hypotheses) in
-    let conclusion, conclusion_variables = Term.expand_pattern ~loc conclusion in
-    let pattern_variables = List.fold_left merge_pattern_variables Pattern_variable.Set.empty pattern_variables in
-    let pattern_variables = merge_pattern_variables pattern_variables conclusion_variables in
+    let hypotheses = List.map (expand_hypothesis ~loc) hypotheses in
+    let conclusion = Term.expand_term_pattern ~loc conclusion in
     [%expr
        let* hypotheses = Ppx_rocq_runtime.Tactics.of_list [%e Ast_builder.Default.elist ~loc hypotheses] in
        let* conclusion = [%e conclusion] in
-       Proofview.tclUNIT (Ppx_rocq_runtime.Pattern_matching.{ hypotheses; conclusion })
-    ], pattern_variables
+       Proofview.tclUNIT (hypotheses, conclusion)
+    ]
 
-  let expand_rhs ~loc ~pattern_variables ~hyps rhs =
-    let rhs = Term.expand_rhs ~loc ~pattern_variables rhs in
-    (* Bind hypothese names. *)
-    let to_binding i hyp = hyp, [%expr __hyps.([%e Ast_builder.Default.eint ~loc i])] in
-    let bindings = List.mapi to_binding hyps in
-    [%expr fun __hyps -> [%e Ppx_utils.with_let_bindings ~loc bindings rhs]]
+  let expand_rhs ~loc goal_pattern rhs =
+    let pattern_variables = goal_pattern_variables goal_pattern in
+    let context_var = context_var goal_pattern.conclusion in
+    let rhs = Term.expand_rhs ~loc ~context_var ~pattern_variables rhs in
+    (** Generate let bindings of the form [let (h, c1, c2) = __hyps.(i)] for hypotheses. *)
+    let hyp_binding i hyp =
+      let hyp_pattern =
+        [%pat?
+         [%p Ast_builder.Default.ppat_var ~loc:hyp.name.loc hyp.name],
+         [%p context_var_pattern ~loc hyp.binder_pattern],
+         [%p context_var_pattern ~loc hyp.type_pattern]]
+      in
+      hyp_pattern, [%expr __hyps.([%e Ast_builder.Default.eint ~loc i])]
+    in
+    let bindings = List.mapi hyp_binding goal_pattern.hypotheses in
+    [%expr fun __hyps -> [%e Ppx_utils.with_let_patterns ~loc bindings rhs]]
 
   let expand_case ~loc { pattern; rhs } =
-    let hyps = List.map (fun { name } -> name) pattern.hypotheses in
-    let pattern, pattern_variables = expand_goal_pattern ~loc pattern in
-    let rhs = expand_rhs ~loc ~pattern_variables ~hyps rhs in
-    [%expr ([%e pattern], [%e rhs])]
+    let lhs = expand_goal_pattern ~loc pattern in
+    let rhs = expand_rhs ~loc pattern rhs in
+    [%expr ([%e lhs], [%e rhs])]
 
-  let expand_match ~ctxt { reverse; cases } =
+  let expand_match_key ~loc key =
+    match key with
+    | Default -> [%expr Ppx_rocq_runtime.Pattern_matching.match_goal]
+    | Lazy -> [%expr Ppx_rocq_runtime.Pattern_matching.lazy_match_goal]
+    | Multi -> [%expr Ppx_rocq_runtime.Pattern_matching.multi_match_goal]
+
+  let expand_match ~ctxt key { reverse; cases } =
     let loc = Expansion_context.Extension.extension_point_loc ctxt in
-    (* TODO: Warn on any case after a wildcard, as they're unreachable. *)
-    let cases = List.map (expand_case ~loc) cases in
-    let cases = Ast_builder.Default.elist ~loc cases in
+    (* TODO: Warn on any case after a wildcard in [lazy_match], as they're
+       unreachable. *)
+    let match_key = expand_match_key ~loc key in
+    let cases =
+      cases
+      |> List.map (expand_case ~loc)
+      |> Ast_builder.Default.elist ~loc
+    in
     let reverse = Ast_builder.Default.ebool ~loc reverse in
     [%expr
-        Proofview.Goal.enter_one (fun __goal -> Ppx_rocq_runtime.Pattern_matching.match_goal ~reverse:[%e reverse] (Proofview.Goal.concl __goal) ~cases:[%e cases])]
+        Proofview.Goal.enter_one (fun __goal ->
+          [%e match_key]
+            ~reverse:[%e reverse]
+            (Proofview.Goal.concl __goal)
+            [%e cases]
+    )]
+end
 
+(** {1 Context-free rules} *)
+
+let rule name key =
   let extension =
     Extension.V3.declare
-      "goal"
+      name
       Extension.Context.expression
-      Ast_pattern.(single_expr_payload match_goal)
-      expand_match
+      Ast_pattern.(single_expr_payload match_expression)
+      (fun ~ctxt payload ->
+        match payload with
+        | MatchTerm expr -> Term.expand_match ~ctxt key expr
+        | MatchGoal expr -> Goal.expand_match ~ctxt key expr)
+  in Ppxlib.Context_free.Rule.extension extension
 
-  let rule = Context_free.Rule.extension extension
-end
+module Rocq = struct let rule = rule "rocq" Default end
+module Lazy = struct let rule = rule "lazy" Lazy end
+module Multi = struct let rule = rule "multi" Multi end

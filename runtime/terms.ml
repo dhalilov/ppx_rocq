@@ -106,5 +106,5 @@ module Pattern = struct
     let _, pattern = Constrintern.interp_constr_pattern env sigma e in
     return pattern
 
-  let wildcard = Pattern.PMeta None
+  let wildcard = return (Pattern.PMeta None)
 end

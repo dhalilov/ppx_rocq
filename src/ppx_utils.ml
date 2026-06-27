@@ -33,6 +33,15 @@ let with_let_bindings ~loc bindings expr =
   in
   with_let_bindings bindings
 
+let with_let_patterns ~loc bindings expr =
+  let rec with_let_patterns = function
+    | [] -> expr
+    | (pattern, binding) :: rest ->
+       let expr = with_let_patterns rest in
+       [%expr let [%p pattern] = [%e binding] in [%e expr]]
+  in
+  with_let_patterns bindings
+
 let gen_symbol =
   let counts = ref [] in
   fun ?(prefix = "_x") () -> begin

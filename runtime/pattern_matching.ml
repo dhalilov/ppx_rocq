@@ -3,6 +3,9 @@
 open Names
 open Tactics
 open Ltac2_plugin
+open Tac2match
+
+let return = Proofview.tclUNIT
 
 (** {1 General matching algorithms} *)
 
@@ -11,115 +14,124 @@ let match_failed () =
   let (e, info) = match_failure in
   Proofview.tclZERO ~info e
 
-(** {2 Backtracking matches} *)
-
-let multi_match cases =
-  let rec multi_match error = function
-  | [] ->
-     let (e, info) = error in
-     Proofview.tclZERO ~info e
-  | case :: rest ->
-     Proofview.tclOR case (fun error -> multi_match error rest)
-  in multi_match match_failure cases
-
-let one_match cases = Proofview.tclONCE (multi_match cases)
-
-(** {2 Non-backtracking match} *)
-
-let lazy_match cases =
-  let rec lazy_match = function
-    | [] -> match_failed ()
-    | case :: rest ->
-       let thunk = Proofview.tclUNIT (fun () -> case) in
-       Proofview.tclOR thunk (fun _ -> lazy_match rest)
-  in
-  let* thunk = Proofview.tclONCE (lazy_match cases) in
-  thunk ()
-
 (** {1 Matching over terms} *)
 
 type 'a case = pattern Proofview.tactic * 'a continuation
-and pattern = Pattern.constr_pattern
-and 'a continuation = substitution -> 'a Proofview.tactic
+and pattern = Tac2match.match_pattern
+and 'a continuation = Constr_matching.context -> substitution -> 'a Proofview.tactic
 and substitution = Ltac_pretype.patvar_map
 
-let match_term_case env sigma t (pattern, k) =
-  let* pattern in
+let match_pattern t pattern =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
   try
     let subst = Constr_matching.matches env sigma pattern t in
-    k subst
+    return subst
   with Constr_matching.PatternMatchingFailure ->
     match_failed ()
 
-let match_term t ~cases =
+let match_context t pattern =
   let* env = Tactics.env in
   let* sigma = Tactics.evar_map in
-  let cases = List.map (fun case -> match_term_case env sigma t case) cases in
-  one_match cases
+  let rec values_of_stream s =
+    match IStream.peek s with
+    | Nil -> match_failed ()
+    | Cons (Constr_matching.{ m_sub = (_, subst); m_ctx }, s) ->
+       Proofview.tclOR
+         (return (m_ctx, subst))
+         (fun _ -> values_of_stream s)
+  in
+  let matches = Constr_matching.match_subterm env sigma (Id.Set.empty, pattern) t in
+  values_of_stream matches
 
-let match_term' t ~cases =
-  let* t in match_term t ~cases
+let match_term t pattern k =
+  match pattern with
+  | MatchPattern pattern ->
+     let context = Constr_matching.empty_context in
+     let* subst = match_pattern t pattern in
+     return (fun () -> k context subst)
+  | MatchContext pattern ->
+     let* (context, subst) = match_context t pattern in
+     return (fun () -> k context subst)
 
-let lazy_match_term t ~cases =
-  let* env = Tactics.env in
-  let* sigma = Tactics.evar_map in
-  let cases = List.map (fun case -> match_term_case env sigma t case) cases in
-  lazy_match cases
+let multi_match_term t cases =
+  let rec interp error cases =
+    match cases with
+    | [] -> let (e, info) = error in Proofview.tclZERO ~info e
+    | (pattern, k) :: cases ->
+       let* pattern in
+       Proofview.tclOR
+         (let* f = match_term t pattern k in f ())
+         (fun e -> interp e cases)
+  in
+  interp match_failure cases
 
-let lazy_match_term' t ~cases =
-  let* t in lazy_match_term t ~cases
+let lazy_match_term t cases =
+  let rec interp error cases =
+    match cases with
+    | [] -> let (e, info) = error in Proofview.tclZERO ~info e
+    | (pattern, k) :: cases ->
+       let* pattern in
+       Proofview.tclOR
+         (match_term t pattern k)
+         (fun e -> interp e cases)
+  in
+  let* f = Proofview.tclONCE (interp match_failure cases) in
+  f ()
 
-let multi_match_term t ~cases =
-  let* env = Tactics.env in
-  let* sigma = Tactics.evar_map in
-  let cases = List.map (fun case -> match_term_case env sigma t case) cases in
-  multi_match cases
-
-let multi_match_term' t ~cases =
-  let* t in multi_match_term t ~cases
+let match_term t cases = Proofview.tclONCE (multi_match_term t cases)
 
 (** {1 Matching over goals} *)
 
-type 'a goal_case = goal_pattern Proofview.tactic * (Id.t array -> 'a continuation)
-and goal_pattern =
-  { hypotheses: (pattern option * pattern) list;
-    conclusion: pattern }
+type 'a goal_case = match_rule Proofview.tactic * ((Id.t * context * context) array -> 'a continuation)
 
-let compile_case case =
-  let* case in
-  let open Tac2match in
-  let binder_to_pattern = function
-    | Some pattern -> Some (MatchPattern pattern)
-    | None -> None
+let context_or_empty context =
+  match context with
+  | Some context -> context
+  | None -> Constr_matching.empty_context
+
+let format_hyp (name, binder_context, typ_context) =
+  let binder_context = context_or_empty (Option.flatten binder_context) in
+  let typ_context = context_or_empty typ_context in
+  name, binder_context, typ_context
+
+let match_goal_pattern ~reverse concl goal_pattern =
+  let* env = Tactics.env in
+  let* sigma = Tactics.evar_map in
+  let* (hypotheses, concl_context, subst) = Tac2match.match_goal env sigma concl ~rev:reverse goal_pattern in
+  let hyps = Array.of_list (List.map format_hyp hypotheses) in
+  let concl_context = context_or_empty concl_context in
+  return (hyps, concl_context, subst)
+
+let match_goal ~reverse concl goal_pattern k =
+  let* (hyps, concl_context, subst) = match_goal_pattern ~reverse concl goal_pattern in
+  return (fun () -> k hyps concl_context subst)
+
+let multi_match_goal ?(reverse = false) concl goal_patterns =
+  let rec interp error cases =
+    match cases with
+    | [] -> let (e, info) = error in Proofview.tclZERO ~info e
+    | (goal_pattern, k) :: goal_patterns ->
+       let* goal_pattern in
+       Proofview.tclOR
+         (let* f = match_goal ~reverse concl goal_pattern k in f ())
+         (fun e -> interp e goal_patterns)
   in
-  let to_patterns (binder, typ) = binder_to_pattern binder, MatchPattern typ in
-  let hypotheses = List.map to_patterns case.hypotheses in
-  let conclusion = MatchPattern case.conclusion in
-  Proofview.tclUNIT (hypotheses, conclusion)
+  interp match_failure goal_patterns
 
-let match_goal_case ~reverse env sigma goal (case, k) =
-  let* rule = compile_case case in
-  try
-    let* (hypotheses, context, subst) = Tac2match.match_goal env sigma goal ~rev:reverse rule in
-    let hyp_names = Array.of_list @@ List.map (fun (name, _, _) -> name) hypotheses in
-    k hyp_names subst
-  with Constr_matching.PatternMatchingFailure ->
-    match_failed ()
+let lazy_match_goal ?(reverse = false) concl goal_patterns =
+  let rec interp error cases =
+    match cases with
+    | [] -> let (e, info) = error in Proofview.tclZERO ~info e
+    | (goal_pattern, k) :: goal_patterns ->
+       let* goal_pattern in
+       Proofview.tclOR
+         (match_goal ~reverse concl goal_pattern k)
+         (fun e -> interp e goal_patterns)
+  in
+  let* f = Proofview.tclONCE (interp match_failure goal_patterns) in
+  f ()
 
-let match_goal ?(reverse = false) goal ~cases =
-  let* env = Tactics.env in
-  let* sigma = Tactics.evar_map in
-  let cases = List.map (fun case -> match_goal_case ~reverse env sigma goal case) cases in
-  one_match cases
+let match_goal ?(reverse = false) concl goal_patterns =
+  Proofview.tclONCE (multi_match_goal ~reverse concl goal_patterns)
 
-let lazy_match_goal ?(reverse = false) goal ~cases =
-  let* env = Tactics.env in
-  let* sigma = Tactics.evar_map in
-  let cases = List.map (fun case -> match_goal_case ~reverse env sigma goal case) cases in
-  lazy_match cases
-
-let multi_match_goal ?(reverse = false) goal ~cases =
-  let* env = Tactics.env in
-  let* sigma = Tactics.evar_map in
-  let cases = List.map (fun case -> match_goal_case ~reverse env sigma goal case) cases in
-  multi_match cases

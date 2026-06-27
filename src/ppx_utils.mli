@@ -13,6 +13,10 @@ val with_let_bindings : loc:location -> (string loc * expression) list -> expres
     For example, [with_let_bindings ~loc [({ txt = "x"; … }, [%expr 0]); ({ txt = "y"; … }; [%expr 1])] [%expr x + y]]
     generates the code [let x = 0 in let y = 1 in x + y]. *)
 
+val with_let_patterns : loc:location -> (Ast.pattern * expression) list -> expression -> expression
+(** [with_let_patterns ~loc bindings expr] generalizes [with_let_bindings] to allow arbitrary
+    patterns on the left-hand side. *)
+
 val gen_symbol : ?prefix:string -> unit -> string
 (** [gen_symbol ?prefix ()] generates a new symbol generator whose name starts with
     [prefix]. This is a better-behaved version of [Ppxlib.gen_symbol] that maintains a different
