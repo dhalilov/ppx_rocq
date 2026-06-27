@@ -77,9 +77,15 @@ let match_term_case =
     Example: [match%constr c with "?x + ?y" -> …]. *)
 let match_term: (expression, match_term_expression -> expression, expression) Ast_pattern.t =
   let match_term = Ast_pattern.(pexp_match __' (many match_term_case)) in
+  let literal_scrutinee =
+    Ast_pattern.(
+      alt
+        (pexp_extension (extension (string "constr") (single_expr_payload (estring __')))) (* [%constr "…"] *)
+        (estring __')) (* "…" *)
+  in
   Ast_pattern.(map ~f:(fun f { txt = scrutinee; loc } cases ->
                    (* Check whether the scrutinee is a constant string. *)
-                   let x = Ast_pattern.parse_res (estring __') loc scrutinee (fun x -> x) in
+                   let x = Ast_pattern.parse_res literal_scrutinee loc scrutinee (fun x -> x) in
                    match x with
                    | Ok string -> f { scrutinee = Literal string; cases }
                    | Error _ -> f { scrutinee = Expression scrutinee; cases }) match_term)
