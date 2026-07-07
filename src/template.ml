@@ -39,44 +39,58 @@ let interpret_fragment ~default ~explicit fragment =
      | Error warning -> Unknown_antiquotation { warning; antiquotation = Antiquotation.to_string antiquotation }
 
 let interpolate ~loc fragments =
+  (* TODO: Replace it with named tuples for OCaml >= 5.4 *)
+  let open struct
+    type t = { parts: expression list;
+               warnings: string loc list }
+  end in
   let default ~loc e = [%expr ([%e e] : string)] in
   let rec interpolate fragments =
     match fragments with
-    | [] -> ~parts:[], ~warnings:[]
+    | [] -> { parts = []; warnings = [] }
     | fragment :: fragments' ->
-       let ~parts, ~warnings = interpolate fragments' in
+       let result = interpolate fragments' in
        match interpret_fragment ~default ~explicit:[] fragment with
        | Constant lit ->
           let expr = Ast_builder.Default.estring ~loc lit in
-          ~parts:(expr :: parts), ~warnings
+          { result with parts = expr :: result.parts }
        | Antiquoted_value expr ->
-          ~parts:(expr :: parts), ~warnings
+          { result with parts = expr :: result.parts }
        | Unknown_antiquotation { warning; antiquotation } ->
           let expr = Ast_builder.Default.estring ~loc antiquotation in
-          ~parts:(expr :: parts), ~warnings:(warning :: warnings)
+          { parts = expr :: result.parts;
+            warnings = warning :: result.warnings }
   in
-  let ~parts, ~warnings = interpolate fragments in
+  let { parts; warnings } = interpolate fragments in
   let concatenated = [%expr String.concat "" [%e Ast_builder.Default.elist ~loc parts]] in
   Ast_diagnostics.warn' warnings concatenated
 
 let interpret ~loc ~default ~explicit fragments =
+  (* TODO: Replace it with named tuples for OCaml >= 5.4 *)
+  let open struct
+    type t = { template: string;
+               antiquotations: expression list;
+               warnings: string loc list }
+  end in
   let rec interpret fragments next_id =
     match fragments with
     | [] ->
-       ~template:"", ~antiquotations:[], ~warnings:[]
+       { template = ""; antiquotations = []; warnings = [] }
     | fragment :: fragments' ->
        match interpret_fragment ~default ~explicit fragment with
        | Constant lit ->
-          let ~template, ~antiquotations, ~warnings = interpret fragments' next_id in
-          ~template:(lit ^ template), ~antiquotations, ~warnings
+          let result = interpret fragments' next_id in
+          { result with template = lit ^ result.template }
        | Antiquoted_value expr ->
-          let ~template, ~antiquotations, ~warnings = interpret fragments' (next_id + 1) in
-          ~template:("%{" ^ string_of_int next_id ^ "}" ^ template), ~antiquotations:(expr :: antiquotations), ~warnings
+          let result = interpret fragments' (next_id + 1) in
+          { result with template = "%{" ^ string_of_int next_id ^ "}" ^ result.template;
+                        antiquotations = expr :: result.antiquotations }
        | Unknown_antiquotation { warning; antiquotation } ->
-          let ~template, ~antiquotations, ~warnings = interpret fragments' next_id in
-          ~template:(antiquotation ^ template), ~antiquotations, ~warnings:(warning :: warnings)
+          let result = interpret fragments' next_id in
+          { result with template = antiquotation ^ result.template;
+                        warnings = warning :: result.warnings }
   in
-  let ~template, ~antiquotations, ~warnings = interpret fragments 0 in
+  let { template; antiquotations; warnings } = interpret fragments 0 in
   let runtime_template = Ast_builder.Default.estring ~loc template in
   let runtime_template = Ast_diagnostics.warn' warnings runtime_template in
   runtime_template, antiquotations

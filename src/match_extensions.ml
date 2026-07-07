@@ -130,12 +130,12 @@ let hypothesis_pattern =
   let rhs =
     Ast_pattern.(
       alt
-        (map ~f:(fun f pattern -> f (~binder_pattern:pattern, ~type_pattern:(Term (Wildcard None)))) binder)
-        (map ~f:(fun f binder typ -> f (~binder_pattern:binder, ~type_pattern:typ)) binder_with_type)
+        (map ~f:(fun f pattern -> f (pattern, Term (Wildcard None))) binder)
+        (map ~f:(fun f binder typ -> f (binder, typ)) binder_with_type)
     )
   in
   let hypothesis_pattern = Ast_pattern.pair name rhs in
-  Ast_pattern.(map ~f:(fun f name (~binder_pattern, ~type_pattern) -> f { name; binder_pattern; type_pattern }) hypothesis_pattern)
+  Ast_pattern.(map ~f:(fun f name (binder_pattern, type_pattern) -> f { name; binder_pattern; type_pattern }) hypothesis_pattern)
 
 (** Pattern for a list of hypotheses.
 
@@ -242,7 +242,7 @@ module Term = struct
       | Some label -> Ast_builder.Default.ppat_var ~loc:label.loc label
       | None -> Ast_builder.Default.ppat_any ~loc
     in
-    match Pattern_variable.Set.to_list pattern_variables with
+    match Pattern_variable.Set.elements pattern_variables with
     | [] ->
        [%expr fun [%p context] _ -> [%e rhs.txt]]
     | pattern_variables ->
