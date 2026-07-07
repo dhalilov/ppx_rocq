@@ -1,0 +1,21 @@
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        runs-on: [ ubuntu-latest ]
+        rocq_version: [ "dev" ]
+    runs-on: ${{ matrix.runs-on }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build with Rocq ${{ matrix.rocq_version }}
+        uses: coq-community/docker-coq-action@v1
+        with:
+          opam_file: 'ppx_rocq.opam'
+          coq_version: ${{ matrix.rocq_version }}
