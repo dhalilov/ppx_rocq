@@ -90,7 +90,11 @@ let expand_antiquotation ~name ~tactic_mode parser quasiparser ~ctxt string stri
       template
   in
   let rocq_loc = Ppx_utils.rocq_loc_of_loc string_loc in
-  let parser = if List.is_empty antiquotations then parser else quasiparser in
+  let parser =
+    match antiquotations with
+    | [] -> parser
+    | _ -> quasiparser
+  in
   let parse_result = [%expr [%e parser] ~loc:[%e rocq_loc] [%e runtime_template]] in
   let parse_result =
     if tactic_mode then [%expr Ppx_rocq_runtime.Tactics.memoize [%e parse_result]]
