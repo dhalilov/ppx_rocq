@@ -7,13 +7,13 @@ license: "LGPL-2.1-only"
 homepage: "https://github.com/epfl-systemf/ppx_rocq"
 bug-reports: "https://github.com/epfl-systemf/ppx_rocq/issues"
 depends: [
-  "dune" {>= "3.21"}
-  "rocq-runtime"
+  "dune" {>= "3.17"}
+  "coq-core" {>= "9.2"}
   "ppxlib"
+  "ppx_optcomp"
   "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {dev}
   [
     "dune"
     "build"
@@ -27,4 +27,3 @@ build: [
   ]
 ]
 dev-repo: "git+https://github.com/epfl-systemf/ppx_rocq.git"
-x-maintenance-intent: ["(latest)"]

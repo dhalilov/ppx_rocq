@@ -1,6 +1,7 @@
-(lang dune 3.21)
+(lang dune 3.17)
 
 (generate_opam_files true)
+(subst disabled) ;; Work-around for Dune 3.17 subst bug: https://github.com/ocaml/dune/issues/11045
 
 (name ppx_rocq)
 (authors "Dario Halilovic")
@@ -15,5 +16,6 @@
  (name ppx_rocq)
  (synopsis "PPX syntax extensions for quoting Rocq terms in OCaml")
  (depends
-   rocq-runtime
-   ppxlib))
+   (coq-core (>= 9.2))
+   ppxlib
+   ppx_optcomp))
