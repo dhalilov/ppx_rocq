@@ -16,19 +16,6 @@ type pattern = Pattern.constr_pattern
 module Expr = struct
   type t = constrexpr
 
-  let of_glob_constr c =
-    let* env = Tactics.env in
-    let* sigma = Tactics.evar_map in
-    let flags = (PrintingFlags.current ()).extern in
-    let extern_env = Constrextern.extern_env ~flags env sigma in
-    return (Constrextern.extern_glob_constr extern_env c)
-
-  let of_constr c =
-    let* env = Tactics.env in
-    let* sigma = Tactics.evar_map in
-    let flags = PrintingFlags.current () in
-    return (Constrextern.extern_constr ~flags env sigma c)
-
   let map f c =
     Constrexpr_ops.map_constr_expr_with_binders
       (fun _ () -> ())
@@ -45,17 +32,10 @@ module Glob_constr = struct
     let sigma = Evd.from_env env in
     Constrintern.intern_constr env sigma e
 
-  let of_constr c =
-    let* env = Tactics.env in
-    let* sigma = Tactics.evar_map in
-    let flags = (PrintingFlags.current ()).detype in
-    return (Detyping.detype Detyping.Now ~flags env sigma c)
-
   let map = Glob_ops.map_glob_constr
-  let fold = Glob_ops.fold_glob_constr
 end
 
-[%%if rocq = (9, 2)]
+[%%if rocq <= (9, 2)]
 let merge_ustate = Evd.merge_universe_context
 [%%else]
 let merge_ustate = Evd.merge_ustate
@@ -71,8 +51,6 @@ module Constr = struct
     let sigma = merge_ustate sigma ustate in
     Proofview.Unsafe.tclEVARS sigma >>
     return constr
-
-  let of_constrexpr e = of_glob_constr (Glob_constr.of_constrexpr e)
 end
 
 module Open_constr = struct
@@ -84,19 +62,24 @@ module Open_constr = struct
     let sigma, econstr = Pretyping.understand_tcc env sigma e in
     Proofview.Unsafe.tclEVARS sigma >>
     return econstr
-
-  let of_constrexpr e =
-    of_glob_constr (Glob_constr.of_constrexpr e)
 end
 
 module Pattern = struct
   type t = pattern
 
+  [%%if rocq >= (9, 2)]
   let of_constrexpr e =
     let* env = Tactics.env in
     let* sigma = Tactics.evar_map in
     let _, pattern = Constrintern.interp_constr_pattern env sigma e in
     return pattern
+  [%%else]
+  let of_constrexpr e =
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let _, pattern = Constrintern.intern_constr_pattern env sigma e in
+    return pattern
+  [%%endif]
 
   let wildcard = return (Pattern.PMeta None)
 end

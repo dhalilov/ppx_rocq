@@ -16,6 +16,6 @@
  (name ppx_rocq)
  (synopsis "PPX syntax extensions for quoting Rocq terms in OCaml")
  (depends
-   (coq-core (>= 9.2))
+   (coq-core (>= 9.0))
    ppxlib
    ppx_optcomp))
