@@ -67,11 +67,19 @@ end
 module Pattern = struct
   type t = pattern
 
+  [%%if rocq >= (9, 2)]
   let of_constrexpr e =
     let* env = Tactics.env in
     let* sigma = Tactics.evar_map in
     let _, pattern = Constrintern.interp_constr_pattern env sigma e in
     return pattern
+  [%%else]
+  let of_constrexpr e =
+    let* env = Tactics.env in
+    let* sigma = Tactics.evar_map in
+    let _, pattern = Constrintern.intern_constr_pattern env sigma e in
+    return pattern
+  [%%endif]
 
   let wildcard = return (Pattern.PMeta None)
 end

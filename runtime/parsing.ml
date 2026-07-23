@@ -110,6 +110,25 @@ let interp_constr_antiquotation ?loc env sigma tycon c =
      in
      { judgment with uj_type = ty }, sigma
 
+[%%if rocq >= (9, 2)]
+let preterm_flags = Ltac2_plugin.Tac2core.preterm_flags
+[%%else]
+let preterm_flags =
+  let open Pretyping in
+  {
+  use_coercions = true;
+  use_typeclasses = Pretyping.NoUseTC;
+  solve_unification_constraints = true;
+  fail_evar = false;
+  expand_evars = false;
+  program_mode = false;
+  polymorphic = false;
+  undeclared_evars_patvars = false;
+  patvars_abstract = false;
+  unconstrained_sorts = false;
+  }
+[%%endif]
+
 let interp_preterm_antiquotation env sigma tycon t =
   let open Pretyping in
   let tycon =
@@ -119,7 +138,7 @@ let interp_preterm_antiquotation env sigma tycon t =
   in
   let sigma, t, ty =
     Pretyping.understand_tcc_ty
-      ~flags:(Ltac2_plugin.Tac2core.preterm_flags)
+      ~flags:preterm_flags
       ~expected_type:tycon
       env sigma t
   in
@@ -172,16 +191,20 @@ let antiquotation_production =
        ((Symbol.token (Tok.PKEYWORD ("}")))))
     (fun _ n _ loc -> Hole.make ~loc n)
 
+[%%if rocq >= (9, 2)]
+let extend_grammar entry rule =
+  Egramml.grammar_extend ~ignore_kw:false entry rule
+[%%else]
+let extend_grammar entry rule =
+  Egramml.grammar_extend entry rule
+[%%endif]
+
 (** Execute function [f] where [entry] allows anti-quotations, which are
     replaced by holes. *)
 let with_holes entry f =
   with_synterp (fun () ->
     let grammar_state = Procq.freeze () in
-    let () =
-      Egramml.grammar_extend ~ignore_kw:false
-        entry
-        (Reuse (Some "0", [antiquotation_production]))
-    in
+    let () = extend_grammar entry (Reuse (Some "0", [antiquotation_production])) in
     Fun.protect
       ~finally:(fun () -> Procq.unfreeze grammar_state)
       f

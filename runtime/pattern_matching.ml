@@ -30,6 +30,15 @@ let match_pattern t pattern =
   with Constr_matching.PatternMatchingFailure ->
     match_failed ()
 
+[%%if rocq < (9, 2)]
+(* [instantiated_pattern] is an abstract type in Rocq < 9.2. *)
+let instantiate_pattern env sigma pattern =
+  Constr_matching.instantiate_pattern env sigma Id.Map.empty pattern
+[%%else]
+let instantiate_pattern env sigma pattern =
+  pattern
+[%%endif]
+
 let match_context t pattern =
   let* env = Tactics.env in
   let* sigma = Tactics.evar_map in
@@ -41,6 +50,7 @@ let match_context t pattern =
          (return (m_ctx, subst))
          (fun _ -> values_of_stream s)
   in
+  let pattern = instantiate_pattern env sigma pattern in
   let matches = Constr_matching.match_subterm env sigma (Id.Set.empty, pattern) t in
   values_of_stream matches
 
