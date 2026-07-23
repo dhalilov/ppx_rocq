@@ -4,12 +4,22 @@ let parse ?loc entry s = Procq.parse_string ?loc entry s
 
 (** Execute function [f] in synterp phase. This function is a hack that tricks
     Rocq by temporarily setting the [Flags.in_synterp] flag. *)
+
+[%%if rocq < (9, 2)]
+let with_synterp f =
+  let old = !Flags.in_synterp_phase in
+  Flags.in_synterp_phase := true;
+  Fun.protect
+    ~finally:(fun () -> Flags.in_synterp_phase := old)
+    f
+[%%else]
 let with_synterp f =
   let old = !Flags.in_synterp_phase in
   Flags.in_synterp_phase := Some true;
   Fun.protect
     ~finally:(fun () -> Flags.in_synterp_phase := old)
     f
+[%%endif]
 
 (* Entries registered at synterp time. *)
 let constrexpr     = with_synterp (fun () -> Procq.eoi_entry Procq.Constr.term)
