@@ -105,19 +105,18 @@ type antiquotation =
   | `Expr of constrexpr         (** [%expr:{…}] *)
   ]
 
-val quasiparse_constrexpr : ?loc:Loc.t -> string -> (antiquotation array -> constrexpr)
-(** [quasiparse_constrexpr s context] behaves like [parse_constexpr s], except that
-    antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
+val constrexpr_of_quasistring : ?loc:Loc.t -> string -> constrexpr
+(** [constrexpr_of_quasistring s] behaves like [parse_constexpr s], except that
+    holes are allowed. *)
 
-val glob_constr_of_quasistring : ?loc: Loc.t -> string -> (antiquotation array -> glob_constr)
-(** [glob_constr_of_quasistring s context] behaves like [glob_constr_of_string s],
-    except that antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
+val substitute_in_constrexpr : constrexpr -> antiquotation array -> constrexpr
+(** [substitute_in_constrexpr t substitutions] performs substitution on the
+    partial term [t], replacing holes of the form [%{n}] with [substitutions.(n)]. *)
 
-val constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array -> constr Proofview.tactic)
-(** [constr_of_quasistring s context] behaves like [constr_of_string s], except
-    that antiquotations of the form [%{n}] are replaced by [context.(n)]. *)
+val glob_constr_of_quasistring : ?loc: Loc.t -> string -> glob_constr
+(** [glob_constr_of_quasistring s] behaves like [glob_constr_of_string s],
+    except that holes are allowed. *)
 
-val open_constr_of_quasistring : ?loc:Loc.t -> string -> (antiquotation array -> open_constr Proofview.tactic)
-(** [open_constr_of_quasistring s context] behaves like [constr_of_string s context],
-    except that antiquotations of the form [%{n}] are replaced by
-    [context.(n)]. *)
+val substitute_in_glob_constr : glob_constr -> antiquotation array -> glob_constr
+(** [substitute_in_glob_constr t substitutions] performs substitution on the
+    partial term [t], replacing holes of the form [%{n}] with [substitutions.(n)]. *)

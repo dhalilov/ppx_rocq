@@ -19,6 +19,7 @@ let hoisted_expressions_collector =
       let loc = expr.pexp_loc in
       match Ast_pattern.parse_res expr_pattern loc expr (fun prefix unannotated -> (prefix, unannotated)) with
       | Ok (prefix, expr) ->
+         let expr, acc = super#expression expr acc in
          let symbol = Ppx_utils.gen_symbol ?prefix () in
          let variable = Ast_builder.Default.pvar ~loc symbol in
          let binding = [%stri let [%p variable] = [%e expr]] in

@@ -78,7 +78,7 @@ module Antiquotations = struct
     ]
 end
 
-let expand_with_antiquotations ~name ~default_kind ~parser ~quasiparser ~ctxt string string_loc =
+let expand_with_antiquotations ~default_kind ~parse ~quasiparse ~ctxt string string_loc =
   let loc = Expansion_context.Extension.extension_point_loc ctxt in
   let template = Template.parse ~loc:string_loc string in
   let runtime_template, antiquotations =
@@ -89,28 +89,27 @@ let expand_with_antiquotations ~name ~default_kind ~parser ~quasiparser ~ctxt st
       template
   in
   let rocq_loc = Ppx_utils.rocq_loc_of_loc string_loc in
-  let parser =
-    match antiquotations with
-    | [] -> parser
-    | _ -> quasiparser
-  in
-  let parse_result = [%expr [%e parser] ~loc:[%e rocq_loc] [%e runtime_template]] in
-  let parse_result = Hoister.hoist ~loc ~name parse_result in
   match antiquotations with
-  | [] -> parse_result
-  | _ -> [%expr [%e parse_result] [%e Ast_builder.Default.pexp_array ~loc antiquotations]]
+  | [] -> parse ~loc ~string_loc ~rocq_loc  ~string:runtime_template
+  | _ ->
+     let antiquotations = Ast_builder.Default.pexp_array ~loc antiquotations in
+     quasiparse ~loc ~string_loc ~rocq_loc ~string:runtime_template ~antiquotations
 
 (** {2 [Constrexpr.constr_expr]} *)
 
 module Expr = struct
-  let expand ~ctxt =
-    let loc = Expansion_context.Extension.extension_point_loc ctxt in
+  let expand =
     expand_with_antiquotations
-      ~name:"expr"
       ~default_kind:Antiquotations.expr
-      ~parser:[%expr Ppx_rocq_runtime.Parsing.parse_constrexpr]
-      ~quasiparser:[%expr Ppx_rocq_runtime.Parsing.quasiparse_constrexpr]
-      ~ctxt
+      ~parse:(fun ~loc ~string_loc:_ ~rocq_loc ~string ->
+        [%expr Ppx_rocq_runtime.Parsing.parse_constrexpr ~loc:[%e rocq_loc] [%e string]]
+        |> Hoister.hoist ~loc ~name:"expr"
+      )
+      ~quasiparse:(fun ~loc ~string_loc:_ ~rocq_loc ~string ~antiquotations ->
+        [%expr Ppx_rocq_runtime.Parsing.constrexpr_of_quasistring ~loc:[%e rocq_loc] [%e string]]
+        |> Hoister.hoist ~name:"expr" ~loc
+        |> fun t -> [%expr Ppx_rocq_runtime.Parsing.substitute_in_constrexpr [%e t] [%e antiquotations]]
+      )
 
   let extension =
     Extension.V3.declare
@@ -125,14 +124,20 @@ end
 (** {2 [Glob_term.glob_constr]} *)
 
 module Preterm = struct
-  let expand ~ctxt =
-    let loc = Expansion_context.Extension.extension_point_loc ctxt in
+  let expand =
     expand_with_antiquotations
-      ~name:"preterm"
       ~default_kind:Antiquotations.preterm
-      ~parser:[%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string]
-      ~quasiparser:[%expr Ppx_rocq_runtime.Parsing.glob_constr_of_quasistring]
-      ~ctxt
+      ~parse:(fun ~loc ~string_loc ~rocq_loc ~string ->
+        [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string ~loc:[%e rocq_loc] [%e string]]
+        |> Persistent_objects.persist ~loc ~string_loc
+        |> Hoister.hoist ~loc ~name:"preterm"
+      )
+      ~quasiparse:(fun ~loc ~string_loc ~rocq_loc ~string ~antiquotations ->
+        [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_quasistring ~loc:[%e rocq_loc] [%e string]]
+        |> Persistent_objects.persist ~loc ~string_loc
+        |> Hoister.hoist ~loc ~name:"preterm"
+        |> fun t -> [%expr Ppx_rocq_runtime.Parsing.substitute_in_glob_constr [%e t] [%e antiquotations]]
+      )
 
   let extension =
     Extension.V3.declare
@@ -147,14 +152,26 @@ end
 (** {2 [EConstr.constr] and [EConstr.t]} *)
 
 module Constr = struct
-  let expand ~ctxt =
-    let loc = Expansion_context.Extension.extension_point_loc ctxt in
+  let expand =
     expand_with_antiquotations
-      ~name:"constr"
       ~default_kind:Antiquotations.constr
-      ~parser:[%expr Ppx_rocq_runtime.Parsing.constr_of_string]
-      ~quasiparser:[%expr Ppx_rocq_runtime.Parsing.constr_of_quasistring]
-      ~ctxt
+      ~parse:(fun ~loc ~string_loc ~rocq_loc ~string ->
+        [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string ~loc:[%e rocq_loc] [%e string]]
+        |> Persistent_objects.persist ~loc ~string_loc
+        |> Hoister.hoist ~loc ~name:"preterm"
+        |> fun t -> [%expr Ppx_rocq_runtime.Terms.Constr.of_glob_constr [%e t]]
+        |> Hoister.hoist ~loc ~name:"constr"
+      )
+      ~quasiparse:(fun ~loc ~string_loc ~rocq_loc ~string ~antiquotations ->
+        [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_quasistring ~loc:[%e rocq_loc] [%e string]]
+        |> Persistent_objects.persist ~loc ~string_loc
+        |> Hoister.hoist ~loc ~name:"preterm"
+        |> fun t -> [%expr Ppx_rocq_runtime.Parsing.substitute_in_glob_constr [%e t] s]
+        |> fun t -> [%expr Ppx_rocq_runtime.Terms.Constr.of_glob_constr [%e t]]
+        |> fun body -> [%expr fun s -> [%e body]]
+        |> Hoister.hoist ~loc ~name:"constr"
+        |> fun f -> [%expr [%e f] [%e antiquotations]]
+      )
 
   let extension =
     Extension.V3.declare
@@ -167,14 +184,26 @@ module Constr = struct
 end
 
 module Open_constr = struct
-  let expand ~ctxt =
-    let loc = Expansion_context.Extension.extension_point_loc ctxt in
+  let expand =
     expand_with_antiquotations
-      ~name:"open_constr"
       ~default_kind:Antiquotations.open_constr
-      ~parser:[%expr Ppx_rocq_runtime.Parsing.open_constr_of_string]
-      ~quasiparser:[%expr Ppx_rocq_runtime.Parsing.open_constr_of_quasistring]
-      ~ctxt
+      ~parse:(fun ~loc ~string_loc ~rocq_loc ~string ->
+        [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string ~loc:[%e rocq_loc] [%e string]]
+        |> Persistent_objects.persist ~loc ~string_loc
+        |> Hoister.hoist ~loc ~name:"preterm"
+        |> fun t -> [%expr Ppx_rocq_runtime.Terms.Open_constr.of_glob_constr [%e t]]
+        |> Hoister.hoist ~loc ~name:"open_constr"
+      )
+      ~quasiparse:(fun ~loc ~string_loc ~rocq_loc ~string ~antiquotations ->
+        [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_quasistring ~loc:[%e rocq_loc] [%e string]]
+        |> Persistent_objects.persist ~loc ~string_loc
+        |> Hoister.hoist ~loc ~name:"preterm"
+        |> fun t -> [%expr Ppx_rocq_runtime.Parsing.substitute_in_glob_constr [%e t] s]
+        |> fun t -> [%expr Ppx_rocq_runtime.Terms.Open_constr.of_glob_constr [%e t]]
+        |> fun body -> [%expr fun s -> [%e body]]
+        |> Hoister.hoist ~loc ~name:"open_constr"
+        |> fun f -> [%expr [%e f] [%e antiquotations]]
+      )
 
   let extension =
     Extension.V3.declare
