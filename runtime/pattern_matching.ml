@@ -35,7 +35,7 @@ let match_pattern t pattern =
 let instantiate_pattern env sigma pattern =
   Constr_matching.instantiate_pattern env sigma Id.Map.empty pattern
 [%%else]
-let instantiate_pattern env sigma pattern =
+let instantiate_pattern _ _ pattern =
   pattern
 [%%endif]
 

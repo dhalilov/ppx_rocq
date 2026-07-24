@@ -212,9 +212,6 @@ let with_holes entry f =
 
 (** {2 Quasiparsing methods} *)
 
-let parse_with_holes ?loc s =
-  with_holes Procq.Constr.term (fun () -> parse_constrexpr ?loc s)
-
 [%%if rocq <= (9, 2)]
 let antiquotation_to_constrexpr ?loc : antiquotation -> Terms.constrexpr = function
   | `Expr e -> e
@@ -229,11 +226,13 @@ let antiquotation_to_constrexpr ?loc : antiquotation -> Terms.constrexpr = funct
      CAst.make ?loc genarg
 [%%endif]
 
-let quasiparse_constrexpr ?loc s =
-  let partial_term = parse_with_holes ?loc s in
-  fun substitutions -> Hole.fill_holes
-                         (fun ?loc (Hole n) -> antiquotation_to_constrexpr ?loc substitutions.(n))
-                         partial_term
+let constrexpr_of_quasistring ?loc s =
+  with_holes Procq.Constr.term (fun () -> parse_constrexpr ?loc s)
+
+let substitute_in_constrexpr term substitutions =
+  Hole.fill_holes
+    (fun ?loc (Hole n) -> antiquotation_to_constrexpr ?loc substitutions.(n))
+    term
 
 [%%if rocq <= (9, 2)]
 let antiquotation_to_glob_constr ?loc (glob_sign: Genintern.glob_sign) : antiquotation -> Terms.glob_constr = function
@@ -257,20 +256,10 @@ let antiquotation_to_glob_constr ?loc glob_sign : antiquotation -> Terms.glob_co
 [%%endif]
 
 let glob_constr_of_quasistring ?loc s =
-  let partial_term = parse_with_holes ?loc s in
-  let partial_glob_constr = Terms.Glob_constr.of_constrexpr partial_term in
-  fun substitutions -> Hole.fill_glob_holes
-                         (fun ?loc (Hole n) glob_sign -> antiquotation_to_glob_constr ?loc glob_sign substitutions.(n))
-                         partial_glob_constr
+  let partial_term = constrexpr_of_quasistring ?loc s in
+  Terms.Glob_constr.of_constrexpr partial_term
 
-let open_constr_of_quasistring ?loc s =
-  let partial_glob_constr = glob_constr_of_quasistring ?loc s in
-  fun substitutions ->
-      let glob_constr = partial_glob_constr substitutions in
-      Terms.Open_constr.of_glob_constr glob_constr
-
-let constr_of_quasistring ?loc s =
-  let partial_glob_constr = glob_constr_of_quasistring ?loc s in
-  fun substitutions ->
-      let glob_constr = partial_glob_constr substitutions in
-      Terms.Constr.of_glob_constr glob_constr
+let substitute_in_glob_constr glob_constr substitutions =
+  Hole.fill_glob_holes
+    (fun ?loc (Hole n) glob_sign -> antiquotation_to_glob_constr ?loc glob_sign substitutions.(n))
+    glob_constr
