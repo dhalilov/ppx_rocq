@@ -40,5 +40,5 @@ val interpret :
     the expression [[%expr "1 + %{0}"]] along with the list [[[%expr x : constr]]]. Note that the runtime template
     uses integers starting from 0, as they are easily recognized by Rocq's parser.
 
-    @see {!Antiquotation.interpret_expression}
+    See {!Antiquotation.interpret_expression}.
  *)
