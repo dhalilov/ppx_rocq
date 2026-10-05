@@ -103,12 +103,14 @@ module Expr = struct
       ~default_kind:Antiquotations.expr
       ~parse:(fun ~loc ~string_loc:_ ~rocq_loc ~string ->
         [%expr Ppx_rocq_runtime.Parsing.parse_constrexpr ~loc:[%e rocq_loc] [%e string]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : expr)])
         |> Hoister.hoist ~loc ~name:"expr"
       )
       ~quasiparse:(fun ~loc ~string_loc:_ ~rocq_loc ~string ~antiquotations ->
         [%expr Ppx_rocq_runtime.Parsing.constrexpr_of_quasistring ~loc:[%e rocq_loc] [%e string]]
         |> Hoister.hoist ~name:"expr" ~loc
         |> fun t -> [%expr Ppx_rocq_runtime.Parsing.substitute_in_constrexpr [%e t] [%e antiquotations]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : expr)])
       )
 
   let extension =
@@ -130,6 +132,7 @@ module Preterm = struct
       ~parse:(fun ~loc ~string_loc ~rocq_loc ~string ->
         [%expr Ppx_rocq_runtime.Parsing.glob_constr_of_string ~loc:[%e rocq_loc] [%e string]]
         |> Persistent_objects.persist ~loc ~string_loc
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : preterm)])
         |> Hoister.hoist ~loc ~name:"preterm"
       )
       ~quasiparse:(fun ~loc ~string_loc ~rocq_loc ~string ~antiquotations ->
@@ -137,6 +140,7 @@ module Preterm = struct
         |> Persistent_objects.persist ~loc ~string_loc
         |> Hoister.hoist ~loc ~name:"preterm"
         |> fun t -> [%expr Ppx_rocq_runtime.Parsing.substitute_in_glob_constr [%e t] [%e antiquotations]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : preterm)])
       )
 
   let extension =
@@ -161,6 +165,7 @@ module Constr = struct
         |> Hoister.hoist ~loc ~name:"preterm"
         |> fun t -> [%expr Ppx_rocq_runtime.Terms.Constr.of_glob_constr [%e t]]
         |> fun t -> [%expr Ppx_rocq_runtime.Tactics.memoize [%e t]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : constr tactic)])
         |> Hoister.hoist ~loc ~name:"constr"
       )
       ~quasiparse:(fun ~loc ~string_loc ~rocq_loc ~string ~antiquotations ->
@@ -172,6 +177,7 @@ module Constr = struct
         |> fun body -> [%expr fun s -> [%e body]]
         |> Hoister.hoist ~loc ~name:"constr"
         |> fun f -> [%expr [%e f] [%e antiquotations]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : constr tactic)])
       )
 
   let extension =
@@ -193,6 +199,7 @@ module Open_constr = struct
         |> Persistent_objects.persist ~loc ~string_loc
         |> Hoister.hoist ~loc ~name:"preterm"
         |> fun t -> [%expr Ppx_rocq_runtime.Terms.Open_constr.of_glob_constr [%e t]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : open_constr tactic)])
         |> Hoister.hoist ~loc ~name:"open_constr"
       )
       ~quasiparse:(fun ~loc ~string_loc ~rocq_loc ~string ~antiquotations ->
@@ -204,6 +211,7 @@ module Open_constr = struct
         |> fun body -> [%expr fun s -> [%e body]]
         |> Hoister.hoist ~loc ~name:"open_constr"
         |> fun f -> [%expr [%e f] [%e antiquotations]]
+        |> Camltac_mode.if_enabled (fun t -> [%expr ([%e t] : open_constr tactic)])
       )
 
   let extension =
